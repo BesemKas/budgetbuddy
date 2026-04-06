@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\BankStatement\GenericCsvParser;
+use App\Services\BankStatement\SpreadsheetLoader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -19,9 +20,30 @@ class BankStatementImportService
 
     public const FORMAT_DEBIT_CREDIT = 'debit_credit';
 
+    public const FORMAT_FNB = 'fnb';
+
+    public const FORMAT_CAPITEC = 'capitec';
+
+    public const FORMAT_STANDARD_BANK = 'standard_bank';
+
+    /**
+     * @return list<string>
+     */
+    public static function formats(): array
+    {
+        return [
+            self::FORMAT_SIGNED,
+            self::FORMAT_DEBIT_CREDIT,
+            self::FORMAT_FNB,
+            self::FORMAT_CAPITEC,
+            self::FORMAT_STANDARD_BANK,
+        ];
+    }
+
     public function __construct(
         private GenericCsvParser $parser,
         private LedgerCurrencyService $ledger,
+        private SpreadsheetLoader $spreadsheetLoader,
     ) {}
 
     /**
@@ -38,16 +60,8 @@ class BankStatementImportService
             throw new InvalidArgumentException(__('Account does not belong to this budget.'));
         }
 
-        $path = $file->getRealPath();
-        if ($path === false) {
-            throw new InvalidArgumentException(__('Could not read the upload.'));
-        }
-
-        $rows = match ($format) {
-            self::FORMAT_SIGNED => $this->parser->parseSignedAmount($path),
-            self::FORMAT_DEBIT_CREDIT => $this->parser->parseDebitCredit($path),
-            default => throw new InvalidArgumentException(__('Unknown import format.')),
-        };
+        $matrix = $this->matrixFromUpload($file);
+        $rows = $this->parser->parseImportFormatMatrix($matrix, $format);
 
         $imported = 0;
         $skipped = 0;
@@ -81,6 +95,25 @@ class BankStatementImportService
         });
 
         return ['imported' => $imported, 'skipped' => $skipped];
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function matrixFromUpload(UploadedFile $file): array
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+
+        if (in_array($ext, ['xlsx', 'xls'], true)) {
+            return $this->spreadsheetLoader->matrixFromUploadedFile($file);
+        }
+
+        $path = $file->getRealPath();
+        if ($path === false) {
+            throw new InvalidArgumentException(__('Could not read the upload.'));
+        }
+
+        return $this->parser->readCsvFile($path);
     }
 
     private function resolveCategory(Budget $budget, LedgerEntryType $type): ?Category

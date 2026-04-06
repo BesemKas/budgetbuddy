@@ -15,6 +15,8 @@ return [
         'long' => 6,
     ],
 
+    'snapshot_trend_months' => max(3, min(36, (int) env('BUDGET_SNAPSHOT_TREND_MONTHS', 24))),
+
     'currency_codes' => [
         'ZAR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'CHF', 'JPY', 'CNY', 'INR', 'NZD', 'SEK', 'NOK',
     ],

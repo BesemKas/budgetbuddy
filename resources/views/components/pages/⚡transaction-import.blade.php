@@ -6,6 +6,7 @@ use App\Services\BankStatementImportService;
 use App\Services\BudgetAccountAccess;
 use App\Services\CurrentBudget;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -39,9 +40,9 @@ new #[Layout('layouts.app')] class extends Component
         $this->authorize('create', Transaction::class);
 
         $this->validate([
-            'csvFile' => ['required', 'file', 'max:5120'],
+            'csvFile' => ['required', 'file', 'max:10240', 'mimes:csv,txt,xlsx,xls'],
             'bank_account_id' => ['required', 'integer', 'exists:bank_accounts,id'],
-            'format' => ['required', 'in:'.BankStatementImportService::FORMAT_SIGNED.','.BankStatementImportService::FORMAT_DEBIT_CREDIT],
+            'format' => ['required', Rule::in(BankStatementImportService::formats())],
         ], [], [
             'csvFile' => __('CSV file'),
         ]);
@@ -104,8 +105,11 @@ new #[Layout('layouts.app')] class extends Component
         {{ __('Upload a CSV bank export. The first row must be a header row. Formats:') }}
     </p>
     <ul class="text-base-content/80 mt-2 list-inside list-disc text-sm">
-        <li>{{ __('Signed amount — columns Date, Amount (negative for spending, positive for income), optional Description.') }}</li>
-        <li>{{ __('Debit / Credit — columns Date, Debit, Credit, optional Description.') }}</li>
+        <li>{{ __('Generic signed — Date, Amount (negative = spend), optional Description.') }}</li>
+        <li>{{ __('Generic debit/credit — Date, Debit, Credit, optional Description.') }}</li>
+        <li>{{ __('FNB / Capitec — typical single Amount column exports; wider header matching.') }}</li>
+        <li>{{ __('Standard Bank — Debit Amount / Credit Amount style columns.') }}</li>
+        <li>{{ __('Excel — .xlsx / .xls first sheet uses the same columns as the format you pick below.') }}</li>
     </ul>
 
     @if ($this->accounts->isEmpty())
@@ -128,14 +132,17 @@ new #[Layout('layouts.app')] class extends Component
             <label class="form-control w-full">
                 <span class="label-text">{{ __('Format') }}</span>
                 <select class="select select-bordered w-full" wire:model="format">
-                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_SIGNED }}">{{ __('Signed amount') }}</option>
-                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_DEBIT_CREDIT }}">{{ __('Debit / Credit') }}</option>
+                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_SIGNED }}">{{ __('Generic — signed amount') }}</option>
+                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_DEBIT_CREDIT }}">{{ __('Generic — debit / credit') }}</option>
+                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_FNB }}">{{ __('FNB-style (signed)') }}</option>
+                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_CAPITEC }}">{{ __('Capitec-style (signed)') }}</option>
+                    <option value="{{ \App\Services\BankStatementImportService::FORMAT_STANDARD_BANK }}">{{ __('Standard Bank (debit / credit)') }}</option>
                 </select>
             </label>
 
             <label class="form-control w-full">
                 <span class="label-text">{{ __('CSV file') }}</span>
-                <input type="file" class="file-input file-input-bordered w-full" wire:model="csvFile" accept=".csv,.txt,text/csv,text/plain" @disabled($this->accounts->isEmpty()) />
+                <input type="file" class="file-input file-input-bordered w-full" wire:model="csvFile" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" @disabled($this->accounts->isEmpty()) />
                 <div wire:loading wire:target="csvFile" class="label-text-alt">{{ __('Uploading…') }}</div>
                 @error('csvFile')
                     <span class="label-text-alt text-error">{{ $message }}</span>

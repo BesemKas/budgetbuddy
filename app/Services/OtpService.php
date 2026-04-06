@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Mail\OtpCodeMail;
 use App\Models\OtpCode;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 
 class OtpService
 {
@@ -18,13 +20,26 @@ class OtpService
 
         $code = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
 
-        OtpCode::query()->create([
+        $otp = OtpCode::query()->create([
             'email' => $email,
             'code_hash' => Hash::make($code),
             'expires_at' => now()->addMinutes(config('budgetbuddy.otp_ttl_minutes')),
         ]);
 
-        Mail::to($email)->send(new OtpCodeMail($code));
+        try {
+            Mail::to($email)->send(new OtpCodeMail($code));
+        } catch (\Throwable $e) {
+            Log::error('OTP email failed to send.', [
+                'exception' => $e,
+                'to' => $email,
+            ]);
+
+            $otp->delete();
+
+            throw ValidationException::withMessages([
+                'email' => __('We could not send the sign-in code. Try another address or check the mail server settings. Details were written to the application log.'),
+            ]);
+        }
     }
 
     public function verify(string $email, string $code): bool

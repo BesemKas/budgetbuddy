@@ -56,6 +56,9 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $nextPaydayLabel = '';
 
+    /** @var list<array{category_id: int, name: string, total: string, percent: float}> */
+    public array $categoryExpenseBreakdown = [];
+
     public function mount(LedgerCurrencyService $ledger, CurrentBudget $currentBudget, BudgetAnalyticsService $analytics): void
     {
         $this->privacyBlur = session('dashboard_privacy_blur', false);
@@ -87,6 +90,9 @@ new #[Layout('layouts.app')] class extends Component
         $this->nextPaydayLabel = $next->translatedFormat('j M Y');
         $runway = $analytics->dailyRunway($budget, $accessibleAccountIds, $user);
         $this->dailyRunway = $runway;
+
+        $this->categoryExpenseBreakdown = $analytics->currentMonthExpenseByCategory($budget, $accessibleAccountIds);
+
         $this->recentTransactions = Transaction::query()
             ->where('budget_id', $budget->id)
             ->whereIn('bank_account_id', $accessibleAccountIds)
@@ -317,6 +323,53 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 </dl>
                 <p class="text-base-content/60 text-xs">{{ __('Runway divides total cash across accessible accounts (in base currency) by days until payday. Set payday in Settings.') }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div class="card bg-base-100 border border-base-300/60 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-lg">{{ __('Spending by category') }}</h2>
+                <p class="text-base-content/60 text-xs">{{ __('This month’s expenses in :currency (base), by category.', ['currency' => $budgetBaseCurrency]) }}</p>
+                <div
+                    wire:key="cat-donut-{{ md5(json_encode($categoryExpenseBreakdown)) }}"
+                    wire:ignore
+                    class="bb-category-donut mt-2 min-h-[280px] w-full"
+                    data-labels='@json(array_column($categoryExpenseBreakdown, 'name'))'
+                    data-values='@json(array_map(fn (array $r): float => (float) $r['total'], $categoryExpenseBreakdown))'
+                    data-currency="{{ e($budgetBaseCurrency) }}"
+                    data-empty-message="{{ e(__('No expense data for this month yet.')) }}"
+                ></div>
+            </div>
+        </div>
+        <div class="card bg-base-100 border border-base-300/60 shadow-sm">
+            <div class="card-body gap-2">
+                <h2 class="card-title text-lg">{{ __('Category breakdown') }}</h2>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm table-zebra">
+                        <thead>
+                            <tr>
+                                <th>{{ __('Category') }}</th>
+                                <th class="text-end">{{ __('%') }}</th>
+                                <th class="text-end">{{ __('Amount') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($categoryExpenseBreakdown as $row)
+                                <tr wire:key="cat-{{ $row['category_id'] }}">
+                                    <td>{{ $row['name'] }}</td>
+                                    <td class="text-end font-mono text-sm {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format($row['percent'], 1) }}</td>
+                                    <td class="text-end font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format((float) $row['total'], 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="text-base-content/60">{{ __('No expenses with categories this month yet.') }}</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

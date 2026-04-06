@@ -29,6 +29,7 @@ Route::middleware(['auth', 'budget'])->group(function (): void {
     Route::livewire('/categories', 'categories.index')->name('categories.index');
     Route::livewire('/budget/team', 'pages.budget-team')->name('budget.team');
     Route::livewire('/budget/activity', 'pages.budget-activity')->name('budget.activity');
+    Route::livewire('/budget/history', 'pages.budget-history')->name('budget.history');
     Route::livewire('/import', 'pages.transaction-import')->name('transactions.import');
     Route::livewire('/settings', 'pages.settings')->name('settings');
 });

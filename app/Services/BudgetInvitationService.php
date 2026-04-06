@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -92,7 +93,22 @@ class BudgetInvitationService
 
         $invitation->load(['bankAccounts', 'invitedBy', 'budget']);
 
-        Mail::to($email)->send(new BudgetInvitationMail($invitation, $plainToken));
+        try {
+            Mail::to($email)->send(new BudgetInvitationMail($invitation, $plainToken));
+        } catch (\Throwable $e) {
+            Log::error('Budget invitation email failed to send.', [
+                'exception' => $e,
+                'budget_id' => $budget->id,
+                'invitation_id' => $invitation->id,
+                'to' => $email,
+            ]);
+
+            $invitation->delete();
+
+            throw ValidationException::withMessages([
+                'inviteEmail' => __('We could not send the invitation email. Try another address or check the mail server settings. Details were written to the application log.'),
+            ]);
+        }
 
         activity()
             ->performedOn($budget)

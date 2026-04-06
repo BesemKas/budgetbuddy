@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Enums\LedgerEntryType;
 use App\Models\BankAccount;
 use App\Models\Budget;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 
@@ -165,5 +167,69 @@ class BudgetAnalyticsService
         $cash = $this->totalCashInBase($budget, $bankAccountIds);
 
         return bcdiv($cash, (string) max(1, $days), 4);
+    }
+
+    /**
+     * Expense totals in base currency for the current calendar month, grouped by category.
+     *
+     * @param  list<int>|null  $limitToBankAccountIds
+     * @return list<array{category_id: int, name: string, total: string, percent: float}>
+     */
+    public function currentMonthExpenseByCategory(Budget $budget, ?array $limitToBankAccountIds): array
+    {
+        if (is_array($limitToBankAccountIds) && $limitToBankAccountIds === []) {
+            return [];
+        }
+
+        $start = now()->startOfMonth();
+        $end = now()->endOfMonth();
+
+        $query = Transaction::query()
+            ->where('transactions.budget_id', $budget->id)
+            ->where('transactions.type', LedgerEntryType::Expense)
+            ->whereBetween('transactions.occurred_on', [$start->toDateString(), $end->toDateString()])
+            ->join('categories', 'categories.id', '=', 'transactions.category_id')
+            ->selectRaw('categories.id as category_id, categories.name as category_name, SUM(transactions.amount * COALESCE(transactions.exchange_rate, 1)) as total_base');
+
+        if (is_array($limitToBankAccountIds)) {
+            $query->whereIn('transactions.bank_account_id', $limitToBankAccountIds);
+        }
+
+        $rows = $query
+            ->groupBy('categories.id', 'categories.name')
+            ->orderByDesc('total_base')
+            ->get();
+
+        $grand = '0';
+        foreach ($rows as $r) {
+            $grand = bcadd($grand, $this->normalizeDecimalString($r->total_base), 4);
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $total = $this->normalizeDecimalString($r->total_base);
+            $percent = 0.0;
+            if (bccomp($grand, '0', 4) !== 0) {
+                $percent = (float) bcmul(bcdiv($total, $grand, 8), '100', 2);
+            }
+
+            $out[] = [
+                'category_id' => (int) $r->category_id,
+                'name' => (string) $r->category_name,
+                'total' => $total,
+                'percent' => $percent,
+            ];
+        }
+
+        return $out;
+    }
+
+    private function normalizeDecimalString(string|float|int $value): string
+    {
+        if (is_string($value)) {
+            return $value === '' ? '0' : $value;
+        }
+
+        return (string) $value;
     }
 }

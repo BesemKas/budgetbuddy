@@ -63,6 +63,11 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('budget.history') }}" class="{{ request()->routeIs('budget.history') ? 'menu-active' : '' }}" wire:navigate>
+                    {{ __('History') }}
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('transactions.import') }}" class="{{ request()->routeIs('transactions.import') ? 'menu-active' : '' }}" wire:navigate>
                     {{ __('Import') }}
                 </a>
@@ -91,6 +96,7 @@
                 <li><a href="{{ route('accounts.index') }}" wire:navigate>{{ __('Accounts') }}</a></li>
                 <li><a href="{{ route('categories.index') }}" wire:navigate>{{ __('Categories') }}</a></li>
                 <li><a href="{{ route('budget.activity') }}" wire:navigate>{{ __('Activity') }}</a></li>
+                <li><a href="{{ route('budget.history') }}" wire:navigate>{{ __('History') }}</a></li>
                 <li><a href="{{ route('transactions.import') }}" wire:navigate>{{ __('Import') }}</a></li>
                 <li><a href="{{ route('settings') }}" wire:navigate>{{ __('Settings') }}</a></li>
                 @can('invite', $currentBudget)

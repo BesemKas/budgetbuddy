@@ -3,6 +3,7 @@
 namespace App\Services\BankStatement;
 
 use App\Enums\LedgerEntryType;
+use App\Services\BankStatementImportService;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -14,16 +15,103 @@ class GenericCsvParser
      */
     public function parseSignedAmount(string $absolutePath): array
     {
-        $rows = $this->readCsvRows($absolutePath);
-        if ($rows === []) {
+        return $this->parseSignedWithProfile($absolutePath, $this->defaultSignedAliases());
+    }
+
+    /**
+     * FNB / similar online banking CSV (single signed Amount column).
+     *
+     * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
+     */
+    public function parseFnb(string $absolutePath): array
+    {
+        return $this->parseSignedWithProfile($absolutePath, $this->fnbCapitecSignedAliases());
+    }
+
+    /**
+     * Capitec Bank app / web CSV (same layout as many SA banks: Date, Description, Amount).
+     *
+     * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
+     */
+    public function parseCapitec(string $absolutePath): array
+    {
+        return $this->parseSignedWithProfile($absolutePath, $this->fnbCapitecSignedAliases());
+    }
+
+    /**
+     * Standard Bank style: separate Debit Amount / Credit Amount columns.
+     *
+     * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
+     */
+    public function parseStandardBank(string $absolutePath): array
+    {
+        return $this->parseDebitCreditWithProfile($absolutePath, $this->standardBankDebitCreditAliases());
+    }
+
+    /**
+     * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
+     */
+    public function parseDebitCredit(string $absolutePath): array
+    {
+        return $this->parseDebitCreditWithProfile($absolutePath, $this->defaultDebitCreditAliases());
+    }
+
+    /**
+     * Parse CSV or Excel rows (first row = headers) using bank import format codes.
+     *
+     * @param  list<list<string|int|float|null>>  $matrix
+     * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
+     */
+    public function parseImportFormatMatrix(array $matrix, string $format): array
+    {
+        $normalized = [];
+        foreach ($matrix as $row) {
+            $normalized[] = $this->normalizeMatrixRow(is_array($row) ? $row : []);
+        }
+
+        return match ($format) {
+            BankStatementImportService::FORMAT_SIGNED => $this->parseSignedMatrix($normalized, $this->defaultSignedAliases()),
+            BankStatementImportService::FORMAT_DEBIT_CREDIT => $this->parseDebitCreditMatrix($normalized, $this->defaultDebitCreditAliases()),
+            BankStatementImportService::FORMAT_FNB => $this->parseSignedMatrix($normalized, $this->fnbCapitecSignedAliases()),
+            BankStatementImportService::FORMAT_CAPITEC => $this->parseSignedMatrix($normalized, $this->fnbCapitecSignedAliases()),
+            BankStatementImportService::FORMAT_STANDARD_BANK => $this->parseDebitCreditMatrix($normalized, $this->standardBankDebitCreditAliases()),
+            default => throw new InvalidArgumentException(__('Unknown import format.')),
+        };
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    public function readCsvFile(string $absolutePath): array
+    {
+        return $this->readCsvRows($absolutePath);
+    }
+
+    /**
+     * @param  array<string, list<string>>  $aliases
+     */
+    private function parseSignedWithProfile(string $absolutePath, array $aliases): array
+    {
+        return $this->parseSignedMatrix($this->readCsvRows($absolutePath), $aliases);
+    }
+
+    /**
+     * @param  list<list<string>>  $matrix
+     * @param  array<string, list<string>>  $aliases
+     * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
+     */
+    private function parseSignedMatrix(array $matrix, array $aliases): array
+    {
+        if ($matrix === []) {
             return [];
         }
 
+        $rows = $matrix;
         $header = array_shift($rows);
-        $map = $this->mapHeaders($header, ['date' => ['date', 'transaction date', 'posted', 'posting date'], 'amount' => ['amount', 'amt'], 'description' => ['description', 'narrative', 'details', 'memo', 'payee']]);
+        $map = $this->mapHeaders($header, $aliases);
 
         if (! isset($map['date'], $map['amount'])) {
-            throw new InvalidArgumentException(__('Could not find required columns. Include headers named Date and Amount (optionally Description).'));
+            throw new InvalidArgumentException(__('Could not find required columns. Include headers for Date and Amount (or use another import format).'));
         }
 
         $out = [];
@@ -69,25 +157,30 @@ class GenericCsvParser
     }
 
     /**
+     * @param  array<string, list<string>>  $aliases
+     */
+    private function parseDebitCreditWithProfile(string $absolutePath, array $aliases): array
+    {
+        return $this->parseDebitCreditMatrix($this->readCsvRows($absolutePath), $aliases);
+    }
+
+    /**
+     * @param  list<list<string>>  $matrix
+     * @param  array<string, list<string>>  $aliases
      * @return list<array{occurred_on: string, type: LedgerEntryType, amount: string, description: ?string}>
      */
-    public function parseDebitCredit(string $absolutePath): array
+    private function parseDebitCreditMatrix(array $matrix, array $aliases): array
     {
-        $rows = $this->readCsvRows($absolutePath);
-        if ($rows === []) {
+        if ($matrix === []) {
             return [];
         }
 
+        $rows = $matrix;
         $header = array_shift($rows);
-        $map = $this->mapHeaders($header, [
-            'date' => ['date', 'transaction date', 'posted'],
-            'description' => ['description', 'narrative', 'details', 'memo'],
-            'debit' => ['debit', 'withdrawal', 'out'],
-            'credit' => ['credit', 'deposit', 'in'],
-        ]);
+        $map = $this->mapHeaders($header, $aliases);
 
         if (! isset($map['date'], $map['debit'], $map['credit'])) {
-            throw new InvalidArgumentException(__('Could not find required columns. Include headers named Date, Debit, and Credit (optionally Description).'));
+            throw new InvalidArgumentException(__('Could not find required columns. Include headers for Date, Debit, and Credit (or use another import format).'));
         }
 
         $out = [];
@@ -133,6 +226,65 @@ class GenericCsvParser
     }
 
     /**
+     * @param  list<string|int|float|null>  $row
+     * @return list<string>
+     */
+    private function normalizeMatrixRow(array $row): array
+    {
+        return array_map(fn (mixed $c): string => $c === null ? '' : trim((string) $c, " \t\n\r\0\x0B\xEF\xBB\xBF"), array_values($row));
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function defaultSignedAliases(): array
+    {
+        return [
+            'date' => ['date', 'transaction date', 'posted', 'posting date', 'value date'],
+            'amount' => ['amount', 'amt', 'value'],
+            'description' => ['description', 'narrative', 'details', 'memo', 'payee', 'reference'],
+        ];
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function fnbCapitecSignedAliases(): array
+    {
+        return [
+            'date' => ['date', 'transaction date', 'trans date', 'posted', 'posting date', 'value date'],
+            'amount' => ['amount', 'amt', 'value', 'transaction amount', 'amount (zar)', 'amt (zar)', 'amount zar'],
+            'description' => ['description', 'narrative', 'details', 'memo', 'payee', 'reference', 'transaction description'],
+        ];
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function defaultDebitCreditAliases(): array
+    {
+        return [
+            'date' => ['date', 'transaction date', 'posted'],
+            'description' => ['description', 'narrative', 'details', 'memo'],
+            'debit' => ['debit', 'withdrawal', 'out', 'debits'],
+            'credit' => ['credit', 'deposit', 'in', 'credits'],
+        ];
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function standardBankDebitCreditAliases(): array
+    {
+        return [
+            'date' => ['date', 'transaction date', 'posted', 'value date'],
+            'description' => ['description', 'narrative', 'details', 'memo', 'reference'],
+            'debit' => ['debit', 'debit amount', 'withdrawal', 'withdrawals', 'out', 'debits'],
+            'credit' => ['credit', 'credit amount', 'deposit', 'deposits', 'in', 'credits'],
+        ];
+    }
+
+    /**
      * @return list<list<string>>
      */
     private function readCsvRows(string $absolutePath): array
@@ -146,7 +298,13 @@ class GenericCsvParser
 
         try {
             while (($data = fgetcsv($handle)) !== false) {
-                $rows[] = array_map(fn (mixed $c): string => is_string($c) ? trim($c) : '', $data);
+                $rows[] = array_map(function (mixed $c): string {
+                    if (! is_string($c)) {
+                        return '';
+                    }
+
+                    return trim($c, " \t\n\r\0\x0B\xEF\xBB\xBF");
+                }, $data);
             }
         } finally {
             fclose($handle);
@@ -202,9 +360,7 @@ class GenericCsvParser
      */
     private function optionalCell(array $row, ?int $index): ?string
     {
-        $v = $this->cell($row, $index);
-
-        return $v;
+        return $this->cell($row, $index);
     }
 
     /**

@@ -45,3 +45,41 @@ it('parses debit credit csv', function (): void {
         ->and($rows[0]['type'])->toBe(LedgerEntryType::Expense)
         ->and($rows[1]['type'])->toBe(LedgerEntryType::Income);
 });
+
+it('parses fnb-style transaction amount column', function (): void {
+    $path = tempnam(sys_get_temp_dir(), 'bbcsv');
+    if ($path === false) {
+        throw new RuntimeException('tempnam failed');
+    }
+
+    unlink($path);
+    $path .= '.csv';
+    file_put_contents($path, "Date,Transaction Amount,Description\n2026-01-10,-50.00,ATM\n");
+
+    $parser = app(GenericCsvParser::class);
+    $rows = $parser->parseFnb($path);
+    @unlink($path);
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['type'])->toBe(LedgerEntryType::Expense)
+        ->and($rows[0]['amount'])->toBe('50.0000');
+});
+
+it('parses standard bank debit amount and credit amount columns', function (): void {
+    $path = tempnam(sys_get_temp_dir(), 'bbcsv');
+    if ($path === false) {
+        throw new RuntimeException('tempnam failed');
+    }
+
+    unlink($path);
+    $path .= '.csv';
+    file_put_contents($path, "Date,Description,Debit Amount,Credit Amount\n2026-03-01,Shop,12.50,\n2026-03-02,Salary,,800.00\n");
+
+    $parser = app(GenericCsvParser::class);
+    $rows = $parser->parseStandardBank($path);
+    @unlink($path);
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows[0]['type'])->toBe(LedgerEntryType::Expense)
+        ->and($rows[1]['type'])->toBe(LedgerEntryType::Income);
+});
