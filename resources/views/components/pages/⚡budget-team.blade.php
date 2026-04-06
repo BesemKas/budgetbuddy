@@ -75,7 +75,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-3xl px-4 py-6">
+<div class="bb-page max-w-3xl">
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">{{ __('Budget team') }}</h1>
         <p class="text-base-content/70 mt-1 text-sm">
@@ -117,7 +117,7 @@ new #[Layout('layouts.app')] class extends Component
                     @enderror
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-sm w-fit" wire:loading.attr="disabled">
+                <button type="submit" class="btn btn-primary btn-sm w-full sm:w-fit" wire:loading.attr="disabled">
                     <span wire:loading.remove wire:target="sendInvite">{{ __('Send invite') }}</span>
                     <span wire:loading wire:target="sendInvite" class="loading loading-spinner loading-sm"></span>
                 </button>
@@ -126,10 +126,10 @@ new #[Layout('layouts.app')] class extends Component
     </div>
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
-        <div class="card-body gap-2">
-            <h2 class="card-title text-lg">{{ __('Pending invitations') }}</h2>
-            <div class="overflow-x-auto">
-                <table class="table table-zebra">
+        <div class="card-body gap-2 p-4 sm:p-6">
+            <h2 class="card-title text-base sm:text-lg">{{ __('Pending invitations') }}</h2>
+            <div class="overflow-x-auto overscroll-x-contain">
+                <table class="table table-zebra table-sm md:table-md min-w-[36rem]">
                     <thead>
                         <tr>
                             <th>{{ __('Email') }}</th>

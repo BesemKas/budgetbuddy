@@ -64,7 +64,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-lg px-4 py-12">
+<div class="bb-page max-w-lg py-8 sm:py-12">
     @if ($fatal)
         <div class="alert alert-warning">
             <span>{{ $fatal }}</span>

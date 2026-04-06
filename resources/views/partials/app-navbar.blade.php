@@ -9,15 +9,15 @@
         })->values()
         : collect();
 @endphp
-<div class="navbar bg-base-100 shadow-sm">
-    <div class="navbar-start flex flex-col items-stretch gap-1 sm:flex-row sm:items-center">
-        <a class="btn btn-ghost text-lg font-semibold tracking-tight" href="{{ route('dashboard') }}">
+<div class="navbar sticky top-0 z-40 min-h-14 flex-wrap gap-y-2 border-b border-base-300/40 bg-base-100/95 px-2 shadow-sm backdrop-blur-sm sm:px-4">
+    <div class="navbar-start flex min-w-0 flex-1 flex-col items-stretch gap-1 sm:max-w-none sm:flex-row sm:items-center sm:gap-2">
+        <a class="btn btn-ghost h-auto min-h-11 max-w-full shrink truncate px-2 text-base font-semibold tracking-tight sm:text-lg" href="{{ route('dashboard') }}">
             {{ config('app.name') }}
         </a>
         @auth
             @if ($navUser->budgets()->count() > 1)
                 <div class="dropdown dropdown-end sm:dropdown-bottom">
-                    <button tabindex="0" type="button" class="btn btn-ghost btn-sm max-w-[14rem] truncate font-normal" aria-label="{{ __('Budget') }}">
+                    <button tabindex="0" type="button" class="btn btn-ghost btn-sm max-w-full truncate font-normal sm:max-w-[14rem]" aria-label="{{ __('Budget') }}">
                         {{ $currentBudget->displayNameFor($navUser) }}
                     </button>
                     <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 mt-2 w-56 border border-base-300/60 p-2 shadow">
@@ -40,8 +40,8 @@
             @endif
         @endauth
     </div>
-    <div class="navbar-center hidden md:flex">
-        <ul class="menu menu-horizontal gap-1 px-1">
+    <div class="navbar-center hidden min-w-0 md:flex">
+        <ul class="menu menu-horizontal flex-nowrap gap-0 px-0 text-sm lg:gap-1 lg:px-1 lg:text-base">
             <li>
                 <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'menu-active' : '' }}" wire:navigate>
                     {{ __('Dashboard') }}
@@ -73,6 +73,11 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('tools.tax') }}" class="{{ request()->routeIs('tools.tax') ? 'menu-active' : '' }}" wire:navigate>
+                    {{ __('Tax') }}
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('settings') }}" class="{{ request()->routeIs('settings') ? 'menu-active' : '' }}" wire:navigate>
                     {{ __('Settings') }}
                 </a>
@@ -86,18 +91,20 @@
             @endcan
         </ul>
     </div>
-    <div class="navbar-end gap-2">
+    <div class="navbar-end shrink-0 gap-1 sm:gap-2">
+        @include('partials.theme-switcher')
         <div class="dropdown dropdown-end md:hidden">
-            <button type="button" tabindex="0" class="btn btn-ghost btn-square" aria-label="{{ __('Menu') }}">
+            <button type="button" tabindex="0" class="btn btn-ghost btn-square min-h-11 min-w-11" aria-label="{{ __('Menu') }}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 mt-2 w-52 p-2 shadow">
+            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 mt-2 max-h-[min(70dvh,24rem)] w-[min(100vw-1rem,18rem)] overflow-y-auto overscroll-contain p-2 shadow">
                 <li><a href="{{ route('dashboard') }}" wire:navigate>{{ __('Dashboard') }}</a></li>
                 <li><a href="{{ route('accounts.index') }}" wire:navigate>{{ __('Accounts') }}</a></li>
                 <li><a href="{{ route('categories.index') }}" wire:navigate>{{ __('Categories') }}</a></li>
                 <li><a href="{{ route('budget.activity') }}" wire:navigate>{{ __('Activity') }}</a></li>
                 <li><a href="{{ route('budget.history') }}" wire:navigate>{{ __('History') }}</a></li>
                 <li><a href="{{ route('transactions.import') }}" wire:navigate>{{ __('Import') }}</a></li>
+                <li><a href="{{ route('tools.tax') }}" wire:navigate>{{ __('Tax') }}</a></li>
                 <li><a href="{{ route('settings') }}" wire:navigate>{{ __('Settings') }}</a></li>
                 @can('invite', $currentBudget)
                     <li><a href="{{ route('budget.team') }}" wire:navigate>{{ __('Team') }}</a></li>
@@ -106,7 +113,7 @@
         </div>
         <form method="POST" action="{{ route('logout') }}" class="inline">
             @csrf
-            <button type="submit" class="btn btn-ghost btn-sm">{{ __('Log out') }}</button>
+            <button type="submit" class="btn btn-ghost btn-sm min-h-11 px-2 sm:px-3">{{ __('Log out') }}</button>
         </form>
     </div>
 </div>

@@ -95,7 +95,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-lg px-4 py-6">
+<div class="bb-page max-w-lg">
     @if (session('status'))
         <div role="status" class="alert alert-success alert-soft mb-4 text-sm">{{ session('status') }}</div>
     @endif
@@ -104,7 +104,7 @@ new #[Layout('layouts.app')] class extends Component
     <p class="text-base-content/70 mt-1 text-sm">
         {{ __('Upload a CSV bank export. The first row must be a header row. Formats:') }}
     </p>
-    <ul class="text-base-content/80 mt-2 list-inside list-disc text-sm">
+    <ul class="text-base-content/80 mt-2 list-disc space-y-1 pl-4 text-sm sm:list-inside sm:pl-5">
         <li>{{ __('Generic signed — Date, Amount (negative = spend), optional Description.') }}</li>
         <li>{{ __('Generic debit/credit — Date, Debit, Credit, optional Description.') }}</li>
         <li>{{ __('FNB / Capitec — typical single Amount column exports; wider header matching.') }}</li>
@@ -119,7 +119,7 @@ new #[Layout('layouts.app')] class extends Component
     @endif
 
     <form wire:submit="import" class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm @if ($this->accounts->isEmpty()) opacity-60 @endif">
-        <div class="card-body gap-4">
+        <div class="card-body gap-4 p-4 sm:p-6">
             <label class="form-control w-full">
                 <span class="label-text">{{ __('Account') }}</span>
                 <select class="select select-bordered w-full" wire:model="bank_account_id" @disabled($this->accounts->isEmpty())>
@@ -149,8 +149,8 @@ new #[Layout('layouts.app')] class extends Component
                 @enderror
             </label>
 
-            <div class="card-actions justify-end">
-                <button type="submit" class="btn btn-primary btn-sm" wire:loading.attr="disabled" @disabled($this->accounts->isEmpty())>
+            <div class="card-actions justify-stretch sm:justify-end">
+                <button type="submit" class="btn btn-primary btn-sm w-full sm:w-auto" wire:loading.attr="disabled" @disabled($this->accounts->isEmpty())>
                     <span wire:loading.remove wire:target="import">{{ __('Import') }}</span>
                     <span wire:loading wire:target="import" class="loading loading-spinner loading-sm"></span>
                 </button>

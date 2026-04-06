@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SmartMode;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -24,6 +25,7 @@ class User extends Authenticatable
         'password',
         'base_currency',
         'payday_day',
+        'smart_mode',
     ];
 
     /**
@@ -44,6 +46,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'base_currency' => 'string',
             'payday_day' => 'integer',
+            'smart_mode' => SmartMode::class,
         ];
     }
 

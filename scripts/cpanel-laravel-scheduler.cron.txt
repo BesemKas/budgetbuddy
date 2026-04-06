@@ -1,0 +1,5 @@
+# Laravel scheduler (runs scheduled commands such as budget snapshots).
+# In cPanel: Cron Jobs → add one line; replace USER and path to your project.
+#
+# * * * * * cd /home/USER/budgetbuddy && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+#

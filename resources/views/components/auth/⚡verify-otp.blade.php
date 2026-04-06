@@ -100,9 +100,9 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="flex min-h-screen items-center justify-center p-4">
+<div class="flex min-h-[100dvh] items-center justify-center p-4 sm:p-6">
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
-        <div class="card-body gap-4">
+        <div class="card-body gap-4 p-4 sm:p-8">
             <h1 class="card-title text-2xl">{{ __('Enter your code') }}</h1>
             <p class="text-base-content/70 text-sm">
                 {{ __('We sent a 6-digit code to :email', ['email' => $otpEmail]) }}

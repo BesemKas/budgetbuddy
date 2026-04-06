@@ -150,7 +150,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-5xl px-4 py-6">
+<div class="bb-page max-w-5xl">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="text-2xl font-semibold tracking-tight">{{ __('Bank accounts') }}</h1>
@@ -163,8 +163,8 @@ new #[Layout('layouts.app')] class extends Component
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
         <div class="card-body p-0">
-            <div class="overflow-x-auto">
-                <table class="table table-zebra">
+            <div class="overflow-x-auto overscroll-x-contain">
+                <table class="table table-zebra table-sm md:table-md min-w-[36rem]">
                     <thead>
                         <tr>
                             <th>{{ __('Name') }}</th>
@@ -216,8 +216,8 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
-    <div class="modal {{ $showModal ? 'modal-open' : '' }}" role="dialog" aria-modal="true">
-        <div class="modal-box max-w-lg">
+    <div class="modal {{ $showModal ? 'modal-open' : '' }} p-4 sm:p-0" role="dialog" aria-modal="true">
+        <div class="bb-modal-box">
             <h3 class="font-bold text-lg">{{ $editingId ? __('Edit account') : __('New account') }}</h3>
             <form wire:submit="save" class="mt-4 flex flex-col gap-4">
                 <label class="form-control w-full">
@@ -256,9 +256,9 @@ new #[Layout('layouts.app')] class extends Component
                     </button>
                 </div>
 
-                <div class="modal-action">
-                    <button type="button" class="btn btn-ghost" wire:click="closeModal">{{ __('Cancel') }}</button>
-                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">{{ __('Save') }}</button>
+                <div class="modal-action flex-col gap-2 sm:flex-row">
+                    <button type="button" class="btn btn-ghost w-full sm:w-auto" wire:click="closeModal">{{ __('Cancel') }}</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto" wire:loading.attr="disabled">{{ __('Save') }}</button>
                 </div>
             </form>
         </div>

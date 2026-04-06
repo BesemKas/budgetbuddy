@@ -31,7 +31,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-4xl px-4 py-6">
+<div class="bb-page max-w-4xl">
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">{{ __('Activity') }}</h1>
         <p class="text-base-content/70 mt-1 text-sm">
@@ -41,8 +41,8 @@ new #[Layout('layouts.app')] class extends Component
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
         <div class="card-body p-0">
-            <div class="overflow-x-auto">
-                <table class="table table-zebra">
+            <div class="overflow-x-auto overscroll-x-contain">
+                <table class="table table-zebra table-sm md:table-md min-w-[28rem]">
                     <thead>
                         <tr>
                             <th>{{ __('When') }}</th>

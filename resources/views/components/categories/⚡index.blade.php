@@ -89,20 +89,20 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-5xl px-4 py-6">
+<div class="bb-page max-w-5xl">
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">{{ __('Categories') }}</h1>
         <p class="text-base-content/70 mt-1 text-sm">{{ __('System defaults plus your own labels for transactions.') }}</p>
     </div>
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
-        <div class="card-body gap-2">
-            <h2 class="card-title text-lg">{{ __('Your categories') }}</h2>
+        <div class="card-body gap-2 p-4 sm:p-6">
+            <h2 class="card-title text-base sm:text-lg">{{ __('Your categories') }}</h2>
             @error('category_delete')
                 <div role="alert" class="alert alert-warning alert-soft text-sm">{{ $message }}</div>
             @enderror
             @can('create', Category::class)
-            <form wire:submit="saveCustom" class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+            <form wire:submit="saveCustom" class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end sm:gap-4">
                 <label class="form-control sm:col-span-1">
                     <span class="label-text">{{ __('Name') }}</span>
                     <input type="text" class="input input-bordered w-full" wire:model="newName" />
@@ -117,14 +117,14 @@ new #[Layout('layouts.app')] class extends Component
                         <option value="expense">{{ __('Expense') }}</option>
                     </select>
                 </label>
-                <button type="submit" class="btn btn-primary btn-sm sm:col-span-1">{{ __('Add') }}</button>
+                <button type="submit" class="btn btn-primary btn-sm w-full sm:col-span-1 sm:w-auto">{{ __('Add') }}</button>
             </form>
             @else
                 <p class="text-base-content/70 text-sm">{{ __('Only budget owners can add or remove custom categories.') }}</p>
             @endcan
 
-            <div class="overflow-x-auto mt-4">
-                <table class="table table-zebra">
+            <div class="overflow-x-auto overscroll-x-contain mt-4">
+                <table class="table table-zebra table-sm md:table-md min-w-[20rem]">
                     <thead>
                         <tr>
                             <th>{{ __('Name') }}</th>
@@ -168,8 +168,8 @@ new #[Layout('layouts.app')] class extends Component
     </div>
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
-        <div class="card-body gap-2">
-            <h2 class="card-title text-lg">{{ __('System defaults') }}</h2>
+        <div class="card-body gap-2 p-4 sm:p-6">
+            <h2 class="card-title text-base sm:text-lg">{{ __('System defaults') }}</h2>
             <p class="text-sm text-base-content/70">{{ __('Available to everyone. Add transactions under these in Quick add.') }}</p>
             <div class="flex flex-wrap gap-2 mt-2">
                 @foreach ($this->systemCategories() as $cat)

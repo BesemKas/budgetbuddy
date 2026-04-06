@@ -32,6 +32,7 @@ Route::middleware(['auth', 'budget'])->group(function (): void {
     Route::livewire('/budget/history', 'pages.budget-history')->name('budget.history');
     Route::livewire('/import', 'pages.transaction-import')->name('transactions.import');
     Route::livewire('/settings', 'pages.settings')->name('settings');
+    Route::livewire('/tools/tax', 'pages.tax-calculator')->name('tools.tax');
 });
 
 Route::post('/logout', function () {

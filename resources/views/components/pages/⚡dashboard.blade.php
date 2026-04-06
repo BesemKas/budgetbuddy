@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\LedgerEntryType;
+use App\Enums\SmartMode;
 use App\Models\BankAccount;
 use App\Models\BudgetInvitation;
 use App\Models\Category;
@@ -152,9 +153,22 @@ new #[Layout('layouts.app')] class extends Component
             'quick_description' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $user = auth()->user();
+        $mode = $user->smart_mode ?? SmartMode::Standard;
+        $survivalThreshold = (float) config('budgetbuddy.survival_expense_note_threshold', 200);
+
+        if ($mode === SmartMode::ZeroBased) {
+            $this->validate([
+                'quick_description' => ['required', 'string', 'min:3', 'max:1000'],
+            ]);
+        } elseif ($mode === SmartMode::Survival && $this->quick_type === 'expense' && (float) $this->quick_amount > $survivalThreshold) {
+            $this->validate([
+                'quick_description' => ['required', 'string', 'min:5', 'max:1000'],
+            ]);
+        }
+
         $this->authorize('create', Transaction::class);
 
-        $user = auth()->user();
         $budget = $currentBudget->current();
         $account = BankAccount::query()->where('budget_id', $budget->id)->findOrFail($this->quick_bank_account_id);
         $this->authorize('view', $account);
@@ -212,7 +226,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto max-w-5xl px-4 py-6">
+<div class="bb-page max-w-5xl">
     @if (session('status'))
         <div role="status" class="alert alert-success alert-soft mb-4 text-sm">{{ session('status') }}</div>
     @endif
@@ -221,9 +235,9 @@ new #[Layout('layouts.app')] class extends Component
             {{ __('You have a pending budget invitation. Open the link in the email we sent to :email to join the team. You can keep using your personal budget until you accept.', ['email' => auth()->user()->email]) }}
         </div>
     @endif
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h1 class="text-2xl font-semibold tracking-tight">{{ __('Dashboard') }}</h1>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div class="min-w-0">
+            <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">{{ __('Dashboard') }}</h1>
             <p class="text-base-content/70 mt-1 text-sm">
                 {{ __('This month (:start – :end) in :currency.', [
                     'start' => now()->startOfMonth()->toFormattedDateString(),
@@ -232,37 +246,37 @@ new #[Layout('layouts.app')] class extends Component
                 ]) }}
             </p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-            <label class="swap swap-rotate btn btn-ghost btn-sm">
+        <div class="flex w-full flex-wrap items-stretch gap-2 sm:w-auto sm:items-center">
+            <label class="swap swap-rotate btn btn-ghost btn-sm grow sm:grow-0">
                 <input type="checkbox" wire:model.live="privacyBlur" />
                 <span class="swap-off">{{ __('Privacy off') }}</span>
                 <span class="swap-on">{{ __('Privacy on') }}</span>
             </label>
-            <button type="button" class="btn btn-primary btn-sm" wire:click="openQuickAdd">
+            <button type="button" class="btn btn-primary btn-sm w-full sm:w-auto" wire:click="openQuickAdd">
                 {{ __('Quick add') }}
             </button>
         </div>
     </div>
 
-    <div class="stats stats-vertical mt-6 w-full shadow-sm lg:stats-horizontal">
-        <div class="stat bg-base-100 rounded-box border border-base-300/60">
+    <div class="stats stats-vertical mt-6 w-full shadow-sm sm:stats-horizontal">
+        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-4 sm:px-4">
             <div class="stat-title">{{ __('Income') }}</div>
-            <div class="stat-value text-success {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+            <div class="stat-value text-success text-2xl tabular-nums sm:text-3xl {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
                 {{ number_format((float) $monthTotals['income'], 2) }}
             </div>
             <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
         </div>
-        <div class="stat bg-base-100 rounded-box border border-base-300/60">
+        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-4 sm:px-4">
             <div class="stat-title">{{ __('Expenses') }}</div>
-            <div class="stat-value text-error {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+            <div class="stat-value text-error text-2xl tabular-nums sm:text-3xl {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
                 {{ number_format((float) $monthTotals['expense'], 2) }}
             </div>
             <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
         </div>
-        <div class="stat bg-base-100 rounded-box border border-base-300/60">
+        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-4 sm:px-4">
             <div class="stat-title">{{ __('Surplus') }}</div>
             <div @class([
-                'stat-value',
+                'stat-value text-2xl tabular-nums sm:text-3xl',
                 'text-success' => (float) $monthTotals['net'] >= 0,
                 'text-warning' => (float) $monthTotals['net'] < 0,
                 'blur-sm select-none' => $privacyBlur,
@@ -273,10 +287,10 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
-    <div class="mt-8 grid grid-cols-1 gap-4 xl:grid-cols-2">
+    <div class="mt-6 grid grid-cols-1 gap-4 lg:mt-8 xl:grid-cols-2">
         <div class="card bg-base-100 border border-base-300/60 shadow-sm">
-            <div class="card-body">
-                <h2 class="card-title text-lg">{{ __('Income & expenses by month') }}</h2>
+            <div class="card-body gap-3 p-4 sm:p-6">
+                <h2 class="card-title text-base sm:text-lg">{{ __('Income & expenses by month') }}</h2>
                 <p class="text-base-content/60 text-xs">{{ __('Last :n full calendar months (base currency).', ['n' => config('budgetbuddy.dashboard_chart_months')]) }}</p>
                 <div
                     wire:key="dash-chart-{{ md5(json_encode($monthlyTrend)) }}"
@@ -292,8 +306,8 @@ new #[Layout('layouts.app')] class extends Component
             </div>
         </div>
         <div class="card bg-base-100 border border-base-300/60 shadow-sm">
-            <div class="card-body gap-3">
-                <h2 class="card-title text-lg">{{ __('Averages & runway') }}</h2>
+            <div class="card-body gap-3 p-4 sm:p-6">
+                <h2 class="card-title text-base sm:text-lg">{{ __('Averages & runway') }}</h2>
                 <dl class="grid grid-cols-1 gap-3 text-sm">
                     <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300/40 pb-2">
                         <dt>{{ __('Avg monthly expenses (:n mo)', ['n' => config('budgetbuddy.rolling_average_months.short')]) }}</dt>
@@ -327,10 +341,10 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
-    <div class="mt-8 grid grid-cols-1 gap-4 xl:grid-cols-2">
+    <div class="mt-6 grid grid-cols-1 gap-4 lg:mt-8 xl:grid-cols-2">
         <div class="card bg-base-100 border border-base-300/60 shadow-sm">
-            <div class="card-body">
-                <h2 class="card-title text-lg">{{ __('Spending by category') }}</h2>
+            <div class="card-body gap-3 p-4 sm:p-6">
+                <h2 class="card-title text-base sm:text-lg">{{ __('Spending by category') }}</h2>
                 <p class="text-base-content/60 text-xs">{{ __('This month’s expenses in :currency (base), by category.', ['currency' => $budgetBaseCurrency]) }}</p>
                 <div
                     wire:key="cat-donut-{{ md5(json_encode($categoryExpenseBreakdown)) }}"
@@ -344,10 +358,10 @@ new #[Layout('layouts.app')] class extends Component
             </div>
         </div>
         <div class="card bg-base-100 border border-base-300/60 shadow-sm">
-            <div class="card-body gap-2">
-                <h2 class="card-title text-lg">{{ __('Category breakdown') }}</h2>
-                <div class="overflow-x-auto">
-                    <table class="table table-sm table-zebra">
+            <div class="card-body gap-2 p-4 sm:p-6">
+                <h2 class="card-title text-base sm:text-lg">{{ __('Category breakdown') }}</h2>
+                <div class="overflow-x-auto overscroll-x-contain rounded-lg">
+                    <table class="table table-zebra table-sm md:table-md min-w-[18rem]">
                         <thead>
                             <tr>
                                 <th>{{ __('Category') }}</th>
@@ -374,11 +388,11 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
-    <div class="card bg-base-100 mt-8 border border-base-300/60 shadow-sm">
-        <div class="card-body gap-2">
-            <h2 class="card-title text-lg">{{ __('Recent activity') }}</h2>
-            <div class="overflow-x-auto">
-                <table class="table table-zebra">
+    <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm lg:mt-8">
+        <div class="card-body gap-3 p-4 sm:p-6">
+            <h2 class="card-title text-base sm:text-lg">{{ __('Recent activity') }}</h2>
+            <div class="overflow-x-auto overscroll-x-contain">
+                <table class="table table-zebra table-sm md:table-md min-w-[42rem]">
                     <thead>
                         <tr>
                             <th>{{ __('Date') }}</th>
@@ -416,8 +430,8 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
-    <div class="modal {{ $showQuickAdd ? 'modal-open' : '' }}" role="dialog" aria-modal="true">
-        <div class="modal-box max-w-lg">
+    <div class="modal {{ $showQuickAdd ? 'modal-open' : '' }} p-4 sm:p-0" role="dialog" aria-modal="true">
+        <div class="bb-modal-box">
             <h3 class="font-bold text-lg">{{ __('Quick add transaction') }}</h3>
             <form wire:submit="saveQuickTransaction" class="mt-4 flex flex-col gap-4">
                 <label class="form-control w-full">
@@ -474,12 +488,25 @@ new #[Layout('layouts.app')] class extends Component
 
                 <label class="form-control w-full">
                     <span class="label-text">{{ __('Note') }}</span>
-                    <textarea class="textarea textarea-bordered w-full" wire:model="quick_description" rows="2" placeholder="{{ __('Optional') }}"></textarea>
+                    @if ($smartMode === \App\Enums\SmartMode::ZeroBased)
+                        <span class="label-text-alt text-base-content/70">{{ __('Required — describe what this money is for.') }}</span>
+                    @elseif ($smartMode === \App\Enums\SmartMode::Survival)
+                        <span class="label-text-alt text-base-content/70">{{ __('Large expenses need a short explanation in this mode.') }}</span>
+                    @endif
+                    <textarea
+                        class="textarea textarea-bordered w-full"
+                        wire:model="quick_description"
+                        rows="2"
+                        placeholder="{{ $smartMode === \App\Enums\SmartMode::ZeroBased ? __('e.g. Groceries for the week') : __('Optional') }}"
+                    ></textarea>
+                    @error('quick_description')
+                        <span class="label-text-alt text-error">{{ $message }}</span>
+                    @enderror
                 </label>
 
-                <div class="modal-action">
-                    <button type="button" class="btn btn-ghost" wire:click="closeQuickAdd">{{ __('Cancel') }}</button>
-                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">
+                <div class="modal-action flex-col gap-2 sm:flex-row">
+                    <button type="button" class="btn btn-ghost w-full sm:w-auto" wire:click="closeQuickAdd">{{ __('Cancel') }}</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto" wire:loading.attr="disabled">
                         <span wire:loading.remove wire:target="saveQuickTransaction">{{ __('Save') }}</span>
                         <span wire:loading wire:target="saveQuickTransaction" class="loading loading-spinner loading-sm"></span>
                     </button>
