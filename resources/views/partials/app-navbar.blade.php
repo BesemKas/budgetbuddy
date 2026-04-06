@@ -105,6 +105,7 @@
         </ul>
     </div>
     <div class="navbar-end shrink-0 gap-1 sm:gap-2">
+        <livewire:notification-bell />
         @include('partials.theme-switcher')
         <div class="dropdown dropdown-end md:hidden">
             <button type="button" tabindex="0" class="btn btn-ghost btn-square min-h-11 min-w-11" aria-label="{{ __('Menu') }}">

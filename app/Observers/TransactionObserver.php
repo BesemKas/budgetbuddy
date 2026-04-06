@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\BankAccount;
 use App\Models\Transaction;
+use App\Services\BudgetInAppNotifier;
 
 class TransactionObserver
 {
@@ -16,6 +17,8 @@ class TransactionObserver
         }
 
         $transaction->bankAccount?->recalculateBalanceFromTransactions();
+
+        app(BudgetInAppNotifier::class)->handleTransactionSaved($transaction);
     }
 
     public function deleted(Transaction $transaction): void
