@@ -77,6 +77,10 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $previousMonthNet = '0';
 
+    public ?string $liquidityAlertMessage = null;
+
+    public ?string $zeroBasedAlertMessage = null;
+
     public function mount(LedgerCurrencyService $ledger, CurrentBudget $currentBudget, BudgetAnalyticsService $analytics): void
     {
         $this->privacyBlur = session('dashboard_privacy_blur', false);
@@ -117,6 +121,29 @@ new #[Layout('layouts.app')] class extends Component
         $this->monthPlannedSpend = $reality->totalBudgetedForMonth($budget, $y, $m);
         $this->monthActualExpenseBase = $reality->totalExpenseInBaseForMonth($budget, $y, $m);
         $this->showMonthSweepPrompt = $this->shouldShowMonthSweepPrompt($user);
+
+        $this->liquidityAlertMessage = null;
+        $this->zeroBasedAlertMessage = null;
+        $mode = $user->smart_mode ?? SmartMode::Standard;
+        $liquidity = $reality->liquidityAssessment($budget, $y, $m);
+        $zeroBased = $reality->zeroBasedAssessment($budget, $y, $m);
+
+        if (
+            in_array($mode, [SmartMode::ZeroBased, SmartMode::Survival, SmartMode::Travel], true)
+            && ! $liquidity['is_funded']
+        ) {
+            $this->liquidityAlertMessage = __('Your category plan totals more than your liquid cash by :amount :currency.', [
+                'amount' => number_format((float) $liquidity['shortfall_base'], 2),
+                'currency' => $this->budgetBaseCurrency,
+            ]);
+        }
+
+        if ($mode === SmartMode::ZeroBased && ! $zeroBased['is_within_income']) {
+            $this->zeroBasedAlertMessage = __('Assigned amounts exceed projected income by :amount :currency.', [
+                'amount' => number_format((float) $zeroBased['overage_base'], 2),
+                'currency' => $this->budgetBaseCurrency,
+            ]);
+        }
 
         $prevStart = Carbon::now()->subMonth()->startOfMonth();
         $prevEnd = $prevStart->copy()->endOfMonth();
@@ -276,6 +303,110 @@ new #[Layout('layouts.app')] class extends Component
     {
         return auth()->user()->smart_mode ?? SmartMode::Standard;
     }
+
+    #[Computed]
+    public function planRemainingBase(): string
+    {
+        return bcsub($this->monthPlannedSpend, $this->monthActualExpenseBase, 4);
+    }
+
+    #[Computed]
+    public function planPercentUsed(): ?float
+    {
+        $planned = (float) $this->monthPlannedSpend;
+        if ($planned <= 0.00001) {
+            return null;
+        }
+
+        return round(((float) $this->monthActualExpenseBase / $planned) * 100, 1);
+    }
+
+    #[Computed]
+    public function planProgressBarPercent(): int
+    {
+        $pct = $this->planPercentUsed;
+        if ($pct === null) {
+            return 0;
+        }
+
+        return (int) min(100, round($pct));
+    }
+
+    /**
+     * @return 'no_plan'|'on_track'|'near_limit'|'over_plan'
+     */
+    #[Computed]
+    public function planStatus(): string
+    {
+        $planned = (float) $this->monthPlannedSpend;
+        $actual = (float) $this->monthActualExpenseBase;
+        if ($planned <= 0.00001) {
+            return 'no_plan';
+        }
+        if ($actual > $planned) {
+            return 'over_plan';
+        }
+        $near = (float) config('budgetbuddy.dashboard_plan_near_limit_percent', 85);
+        $pct = ($planned > 0) ? ($actual / $planned) * 100 : 0.0;
+        if ($pct >= $near) {
+            return 'near_limit';
+        }
+
+        return 'on_track';
+    }
+
+    #[Computed]
+    public function daysLeftInMonth(): int
+    {
+        $start = now()->startOfDay();
+        $end = now()->copy()->endOfMonth()->startOfDay();
+
+        return (int) $start->diffInDays($end) + 1;
+    }
+
+    #[Computed]
+    public function safeDailySpendBase(): ?string
+    {
+        if ($this->planStatus === 'no_plan' || $this->planStatus === 'over_plan') {
+            return null;
+        }
+        $remaining = (float) $this->planRemainingBase;
+        if ($remaining <= 0) {
+            return null;
+        }
+        $days = $this->daysLeftInMonth;
+        if ($days <= 0) {
+            return null;
+        }
+
+        return bcdiv((string) $remaining, (string) $days, 4);
+    }
+
+    /**
+     * @return list<array{category_id: int, name: string, total: string, percent: float}>
+     */
+    #[Computed]
+    public function topCategoryExpenseRows(): array
+    {
+        return array_slice($this->categoryExpenseBreakdown, 0, 8);
+    }
+
+    #[Computed]
+    public function hasMoreCategoryRowsThanTop(): bool
+    {
+        return count($this->categoryExpenseBreakdown) > 8;
+    }
+
+    #[Computed]
+    public function planProgressColorClass(): string
+    {
+        return match ($this->planStatus) {
+            'over_plan' => 'progress-error',
+            'near_limit' => 'progress-warning',
+            'on_track' => 'progress-success',
+            default => 'progress-neutral',
+        };
+    }
 };
 ?>
 
@@ -334,9 +465,9 @@ new #[Layout('layouts.app')] class extends Component
     @endif
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div class="min-w-0">
-            <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">{{ __('Dashboard') }}</h1>
+            <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">{{ __('This month') }}</h1>
             <p class="text-base-content/70 mt-1 text-sm">
-                {{ __('This month (:start – :end) in :currency.', [
+                {{ __('This month (:start – :end) in :currency. Track spending against your plan and stay on budget.', [
                     'start' => now()->startOfMonth()->toFormattedDateString(),
                     'end' => now()->endOfMonth()->toFormattedDateString(),
                     'currency' => $budgetBaseCurrency,
@@ -349,48 +480,80 @@ new #[Layout('layouts.app')] class extends Component
                 <span class="swap-off">{{ __('Privacy off') }}</span>
                 <span class="swap-on">{{ __('Privacy on') }}</span>
             </label>
+            <a href="{{ route('budget.planner') }}" wire:navigate class="btn btn-outline btn-sm grow sm:grow-0">{{ __('Budget planner') }}</a>
             <button type="button" class="btn btn-primary btn-sm w-full sm:w-auto" wire:click="openQuickAdd">
                 {{ __('Quick add') }}
             </button>
         </div>
     </div>
 
-    <div class="stats stats-vertical mt-6 w-full shadow-sm sm:stats-horizontal">
-        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-4 sm:px-4">
-            <div class="stat-title">{{ __('Income') }}</div>
-            <div class="stat-value text-success text-2xl tabular-nums sm:text-3xl {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
-                {{ number_format((float) $monthTotals['income'], 2) }}
+    <div class="card bg-base-100 mt-6 border border-primary/20 shadow-md ring-1 ring-primary/10">
+        <div class="card-body gap-4 p-4 sm:p-6">
+            @if ($liquidityAlertMessage)
+                <div role="status" class="alert alert-warning alert-soft text-sm">{{ $liquidityAlertMessage }}</div>
+            @endif
+            @if ($zeroBasedAlertMessage)
+                <div role="status" class="alert alert-warning alert-soft text-sm">{{ $zeroBasedAlertMessage }}</div>
+            @endif
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h2 class="card-title text-base sm:text-lg">{{ __('Plan vs actual (this month)') }}</h2>
+                    <p class="text-base-content/60 text-xs">
+                        {{ __('Planned category totals for this calendar month compared to expenses in :currency (base).', ['currency' => $budgetBaseCurrency]) }}
+                    </p>
+                </div>
+                @if ($this->planStatus !== 'no_plan')
+                    <span
+                        @class([
+                            'badge badge-lg',
+                            'badge-success' => $this->planStatus === 'on_track',
+                            'badge-warning' => $this->planStatus === 'near_limit',
+                            'badge-error' => $this->planStatus === 'over_plan',
+                        ])
+                    >
+                        @if ($this->planStatus === 'on_track')
+                            {{ __('On track') }}
+                        @elseif ($this->planStatus === 'near_limit')
+                            {{ __('Near limit') }}
+                        @else
+                            {{ __('Over plan') }}
+                        @endif
+                    </span>
+                @endif
             </div>
-            <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
-        </div>
-        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-4 sm:px-4">
-            <div class="stat-title">{{ __('Expenses') }}</div>
-            <div class="stat-value text-error text-2xl tabular-nums sm:text-3xl {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
-                {{ number_format((float) $monthTotals['expense'], 2) }}
-            </div>
-            <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
-        </div>
-        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-4 sm:px-4">
-            <div class="stat-title">{{ __('Surplus') }}</div>
-            <div @class([
-                'stat-value text-2xl tabular-nums sm:text-3xl',
-                'text-success' => (float) $monthTotals['net'] >= 0,
-                'text-warning' => (float) $monthTotals['net'] < 0,
-                'blur-sm select-none' => $privacyBlur,
-            ])>
-                {{ number_format((float) $monthTotals['net'], 2) }}
-            </div>
-            <div class="stat-desc">{{ __('Income minus expenses (base currency)') }}</div>
-        </div>
-    </div>
 
-    <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
-        <div class="card-body gap-3 p-4 sm:p-6">
-            <h2 class="card-title text-base sm:text-lg">{{ __('Plan vs actual (this month)') }}</h2>
-            <p class="text-base-content/60 text-xs">
-                {{ __('Sum of planned category amounts for this calendar month vs total expenses in :currency (base).', ['currency' => $budgetBaseCurrency]) }}
-            </p>
-            <dl class="grid gap-3 sm:grid-cols-2">
+            @if ($this->planStatus === 'no_plan')
+                <div role="status" class="alert alert-info text-sm">
+                    <span>{{ __('You have not set this month’s category amounts yet. Add your plan so you can track spending against it.') }}</span>
+                    <div class="mt-2">
+                        <a href="{{ route('budget.planner') }}" wire:navigate class="btn btn-primary btn-sm">{{ __('Set your plan') }}</a>
+                    </div>
+                </div>
+            @else
+                <div>
+                    <div class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/70">
+                        <span id="plan-progress-label">{{ __('Plan used') }}</span>
+                        @if ($this->planPercentUsed !== null)
+                            <span class="font-mono tabular-nums {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format($this->planPercentUsed, 1) }}%</span>
+                        @endif
+                    </div>
+                    <progress
+                        id="plan-progress"
+                        class="progress {{ $this->planProgressColorClass }} h-3 w-full"
+                        max="100"
+                        value="{{ $this->planProgressBarPercent }}"
+                        aria-labelledby="plan-progress-label"
+                        aria-valuenow="{{ $this->planProgressBarPercent }}"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                    ></progress>
+                    <p class="sr-only">
+                        {{ __('Plan used: :pct percent.', ['pct' => $this->planProgressBarPercent]) }}
+                    </p>
+                </div>
+            @endif
+
+            <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="rounded-box border border-base-300/50 bg-base-200/30 p-3">
                     <dt class="text-base-content/70 text-xs">{{ __('Planned (categories)') }}</dt>
                     <dd @class(['font-mono text-lg tabular-nums', 'blur-sm select-none' => $privacyBlur])>
@@ -403,7 +566,84 @@ new #[Layout('layouts.app')] class extends Component
                         {{ number_format((float) $monthActualExpenseBase, 2) }} {{ $budgetBaseCurrency }}
                     </dd>
                 </div>
+                @if ($this->planStatus !== 'no_plan')
+                    <div class="rounded-box border border-base-300/50 bg-base-200/30 p-3">
+                        <dt class="text-base-content/70 text-xs">{{ __('Remaining') }}</dt>
+                        <dd
+                            @class([
+                                'font-mono text-lg tabular-nums',
+                                'text-success' => (float) $this->planRemainingBase >= 0,
+                                'text-warning' => (float) $this->planRemainingBase < 0,
+                                'blur-sm select-none' => $privacyBlur,
+                            ])
+                        >
+                            {{ number_format((float) $this->planRemainingBase, 2) }} {{ $budgetBaseCurrency }}
+                        </dd>
+                    </div>
+                    <div class="rounded-box border border-base-300/50 bg-base-200/30 p-3">
+                        <dt class="text-base-content/70 text-xs">{{ __('% of plan used') }}</dt>
+                        <dd @class(['font-mono text-lg tabular-nums', 'blur-sm select-none' => $privacyBlur])>
+                            @if ($this->planPercentUsed !== null)
+                                {{ number_format($this->planPercentUsed, 1) }}%
+                            @else
+                                {{ __('—') }}
+                            @endif
+                        </dd>
+                    </div>
+                @endif
             </dl>
+
+            @if ($this->planStatus !== 'no_plan')
+                <div class="flex flex-col gap-1 rounded-box border border-base-300/40 bg-base-200/20 p-3 text-sm sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-4">
+                    <div>
+                        <span class="text-base-content/70">{{ __('Days left this month') }}</span>
+                        <span class="ms-1 font-medium tabular-nums">{{ $this->daysLeftInMonth }}</span>
+                    </div>
+                    <div>
+                        <span class="text-base-content/70">{{ __('Safe spend per day (plan)') }}</span>
+                        <span class="ms-1 font-mono tabular-nums {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                            @if ($this->safeDailySpendBase === null)
+                                {{ __('—') }}
+                            @else
+                                {{ number_format((float) $this->safeDailySpendBase, 2) }} {{ $budgetBaseCurrency }}
+                            @endif
+                        </span>
+                    </div>
+                </div>
+            @endif
+
+            <div class="card-actions justify-end border-t border-base-300/40 pt-2">
+                <a href="{{ route('budget.planner') }}" wire:navigate class="btn btn-primary btn-sm">{{ __('Open budget planner') }}</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats stats-vertical mt-4 w-full shadow-sm sm:stats-horizontal">
+        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-3 sm:px-3">
+            <div class="stat-title text-xs sm:text-sm">{{ __('Income') }}</div>
+            <div class="stat-value text-success text-xl tabular-nums sm:text-2xl {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                {{ number_format((float) $monthTotals['income'], 2) }}
+            </div>
+            <div class="stat-desc text-xs">{{ $budgetBaseCurrency }}</div>
+        </div>
+        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-3 sm:px-3">
+            <div class="stat-title text-xs sm:text-sm">{{ __('Expenses') }}</div>
+            <div class="stat-value text-error text-xl tabular-nums sm:text-2xl {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                {{ number_format((float) $monthTotals['expense'], 2) }}
+            </div>
+            <div class="stat-desc text-xs">{{ $budgetBaseCurrency }}</div>
+        </div>
+        <div class="stat bg-base-100 rounded-box border border-base-300/60 px-2 py-3 sm:px-3">
+            <div class="stat-title text-xs sm:text-sm">{{ __('Left this month') }}</div>
+            <div @class([
+                'stat-value text-xl tabular-nums sm:text-2xl',
+                'text-success' => (float) $monthTotals['net'] >= 0,
+                'text-warning' => (float) $monthTotals['net'] < 0,
+                'blur-sm select-none' => $privacyBlur,
+            ])>
+                {{ number_format((float) $monthTotals['net'], 2) }}
+            </div>
+            <div class="stat-desc text-xs">{{ __('Income minus expenses (base)') }}</div>
         </div>
     </div>
 
@@ -461,26 +701,24 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
-    <div class="mt-6 grid grid-cols-1 gap-4 lg:mt-8 xl:grid-cols-2">
-        <div class="card bg-base-100 border border-base-300/60 shadow-sm">
-            <div class="card-body gap-3 p-4 sm:p-6">
+    <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm lg:mt-8">
+        <div class="card-body gap-4 p-4 sm:p-6">
+            <div>
                 <h2 class="card-title text-base sm:text-lg">{{ __('Spending by category') }}</h2>
                 <p class="text-base-content/60 text-xs">{{ __('This month’s expenses in :currency (base), by category.', ['currency' => $budgetBaseCurrency]) }}</p>
-                <div
-                    wire:key="cat-donut-{{ md5(json_encode($categoryExpenseBreakdown)) }}"
-                    wire:ignore
-                    class="bb-category-donut mt-2 min-h-[280px] w-full"
-                    data-labels='@json(array_column($categoryExpenseBreakdown, 'name'))'
-                    data-values='@json(array_map(fn (array $r): float => (float) $r['total'], $categoryExpenseBreakdown))'
-                    data-currency="{{ e($budgetBaseCurrency) }}"
-                    data-empty-message="{{ e(__('No expense data for this month yet.')) }}"
-                ></div>
             </div>
-        </div>
-        <div class="card bg-base-100 border border-base-300/60 shadow-sm">
-            <div class="card-body gap-2 p-4 sm:p-6">
-                <h2 class="card-title text-base sm:text-lg">{{ __('Category breakdown') }}</h2>
-                <div class="overflow-x-auto overscroll-x-contain rounded-lg">
+            <div
+                wire:key="cat-donut-{{ md5(json_encode($categoryExpenseBreakdown)) }}"
+                wire:ignore
+                class="bb-category-donut min-h-[240px] w-full max-w-xl mx-auto"
+                data-labels='@json(array_column($categoryExpenseBreakdown, 'name'))'
+                data-values='@json(array_map(fn (array $r): float => (float) $r['total'], $categoryExpenseBreakdown))'
+                data-currency="{{ e($budgetBaseCurrency) }}"
+                data-empty-message="{{ e(__('No expense data for this month yet.')) }}"
+            ></div>
+            <div>
+                <h3 class="text-sm font-semibold text-base-content/80">{{ __('Top categories') }}</h3>
+                <div class="overflow-x-auto overscroll-x-contain rounded-lg mt-2">
                     <table class="table table-zebra table-sm md:table-md min-w-[18rem]">
                         <thead>
                             <tr>
@@ -490,7 +728,7 @@ new #[Layout('layouts.app')] class extends Component
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse ($categoryExpenseBreakdown as $row)
+                            @forelse ($this->topCategoryExpenseRows as $row)
                                 <tr wire:key="cat-{{ $row['category_id'] }}">
                                     <td>{{ $row['name'] }}</td>
                                     <td class="text-end font-mono text-sm {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format($row['percent'], 1) }}</td>
@@ -504,13 +742,18 @@ new #[Layout('layouts.app')] class extends Component
                         </tbody>
                     </table>
                 </div>
+                @if ($this->hasMoreCategoryRowsThanTop)
+                    <p class="mt-3 text-center text-sm">
+                        <a href="{{ route('budget.planner') }}" wire:navigate class="link link-primary">{{ __('See full breakdown in Budget planner') }}</a>
+                    </p>
+                @endif
             </div>
         </div>
     </div>
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm lg:mt-8">
         <div class="card-body gap-3 p-4 sm:p-6">
-            <h2 class="card-title text-base sm:text-lg">{{ __('Recent activity') }}</h2>
+            <h2 class="card-title text-base sm:text-lg">{{ __('Recent transactions') }}</h2>
             <div class="overflow-x-auto overscroll-x-contain">
                 <table class="table table-zebra table-sm md:table-md min-w-[42rem]">
                     <thead>
@@ -541,7 +784,11 @@ new #[Layout('layouts.app')] class extends Component
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-base-content/60">{{ __('No transactions yet. Add one with Quick add.') }}</td>
+                                <td colspan="6" class="text-base-content/60">
+                                    {{ __('No transactions yet. Add one with Quick add,') }}
+                                    <a href="{{ route('transactions.import') }}" wire:navigate class="link link-primary">{{ __('import') }}</a>{{ __(', or open ') }}
+                                    <a href="{{ route('budget.planner') }}" wire:navigate class="link link-primary">{{ __('Budget planner') }}</a>.
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>

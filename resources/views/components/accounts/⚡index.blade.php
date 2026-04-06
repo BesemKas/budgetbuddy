@@ -2,6 +2,8 @@
 
 use App\Enums\BankAccountKind;
 use App\Models\BankAccount;
+use App\Models\Transaction;
+use App\Services\AccountTransferService;
 use App\Services\BudgetAccountAccess;
 use App\Services\CurrentBudget;
 use App\Services\ExchangeRateService;
@@ -13,6 +15,18 @@ new #[Layout('layouts.app')] class extends Component
 {
 
     public bool $showModal = false;
+
+    public bool $showMoveModal = false;
+
+    public ?int $transfer_from_bank_account_id = null;
+
+    public ?int $transfer_to_bank_account_id = null;
+
+    public string $transfer_amount = '';
+
+    public string $transfer_occurred_on = '';
+
+    public string $transfer_description = '';
 
     public ?int $editingId = null;
 
@@ -53,6 +67,56 @@ new #[Layout('layouts.app')] class extends Component
     public function closeModal(): void
     {
         $this->showModal = false;
+    }
+
+    public function openMoveFunds(CurrentBudget $currentBudget): void
+    {
+        $this->authorize('create', Transaction::class);
+        $this->resetValidation();
+        $this->transfer_from_bank_account_id = null;
+        $this->transfer_to_bank_account_id = null;
+        $this->transfer_amount = '';
+        $this->transfer_occurred_on = now()->toDateString();
+        $this->transfer_description = '';
+        $this->showMoveModal = true;
+    }
+
+    public function closeMoveModal(): void
+    {
+        $this->showMoveModal = false;
+    }
+
+    public function saveMoveFunds(AccountTransferService $accountTransfer, CurrentBudget $currentBudget): void
+    {
+        $this->authorize('create', Transaction::class);
+
+        $budget = $currentBudget->current();
+        $accessibleIds = app(BudgetAccountAccess::class)->accessibleBankAccountIds(auth()->user(), $budget);
+
+        $this->validate([
+            'transfer_from_bank_account_id' => ['required', 'integer', Rule::in($accessibleIds)],
+            'transfer_to_bank_account_id' => ['required', 'integer', Rule::in($accessibleIds), 'different:transfer_from_bank_account_id'],
+            'transfer_amount' => ['required', 'numeric', 'min:0.01'],
+            'transfer_occurred_on' => ['required', 'date'],
+            'transfer_description' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $from = BankAccount::query()->where('budget_id', $budget->id)->findOrFail($this->transfer_from_bank_account_id);
+        $to = BankAccount::query()->where('budget_id', $budget->id)->findOrFail($this->transfer_to_bank_account_id);
+        $this->authorize('view', $from);
+        $this->authorize('view', $to);
+
+        $accountTransfer->transfer(
+            auth()->user(),
+            $budget,
+            $from->id,
+            $to->id,
+            $this->transfer_amount,
+            $this->transfer_occurred_on,
+            $this->transfer_description !== '' ? $this->transfer_description : null,
+        );
+
+        $this->showMoveModal = false;
     }
 
     public function fetchSpotRate(ExchangeRateService $exchangeRateService, CurrentBudget $currentBudget): void
@@ -156,6 +220,15 @@ new #[Layout('layouts.app')] class extends Component
     {
         return app(CurrentBudget::class)->current()->base_currency;
     }
+
+    public function getCanMoveFundsProperty(): bool
+    {
+        if (! auth()->user()->can('create', Transaction::class)) {
+            return false;
+        }
+
+        return $this->accounts->count() >= 2;
+    }
 };
 ?>
 
@@ -165,9 +238,14 @@ new #[Layout('layouts.app')] class extends Component
             <h1 class="text-2xl font-semibold tracking-tight">{{ __('Bank accounts') }}</h1>
             <p class="text-base-content/70 mt-1 text-sm">{{ __('Manage accounts and FX rates to your base currency (:c).', ['c' => $this->budgetBaseCurrency]) }}</p>
         </div>
-        @can('create', BankAccount::class)
-            <button type="button" class="btn btn-primary btn-sm" wire:click="openCreate">{{ __('Add account') }}</button>
-        @endcan
+        <div class="flex flex-wrap items-center gap-2">
+            @if ($this->canMoveFunds)
+                <button type="button" class="btn btn-outline btn-sm" wire:click="openMoveFunds">{{ __('Move funds') }}</button>
+            @endif
+            @can('create', BankAccount::class)
+                <button type="button" class="btn btn-primary btn-sm" wire:click="openCreate">{{ __('Add account') }}</button>
+            @endcan
+        </div>
     </div>
 
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
@@ -291,5 +369,71 @@ new #[Layout('layouts.app')] class extends Component
             </form>
         </div>
         <button type="button" class="modal-backdrop" wire:click="closeModal" aria-label="{{ __('Close') }}"></button>
+    </div>
+
+    <div class="modal {{ $showMoveModal ? 'modal-open' : '' }} p-4 sm:p-0" role="dialog" aria-modal="true">
+        <div class="modal-box bb-modal-box">
+            <h3 class="font-bold text-lg">{{ __('Move funds between accounts') }}</h3>
+            <p class="text-base-content/70 mt-1 text-sm">
+                {{ __('Moves money from one account to another in the same currency. This does not count as income or spending in your budget totals.') }}
+            </p>
+            <form wire:submit="saveMoveFunds" class="mt-4 flex flex-col gap-4">
+                <label class="form-control w-full">
+                    <span class="label-text">{{ __('From') }}</span>
+                    <select class="select select-bordered w-full" wire:model="transfer_from_bank_account_id">
+                        <option value="">{{ __('Choose…') }}</option>
+                        @foreach ($this->accounts as $acc)
+                            <option value="{{ $acc->id }}">{{ $acc->name }} — {{ $acc->currency_code }} ({{ number_format((float) $acc->balance, 2) }})</option>
+                        @endforeach
+                    </select>
+                    @error('transfer_from_bank_account_id')
+                        <span class="label-text-alt text-error">{{ $message }}</span>
+                    @enderror
+                </label>
+                <label class="form-control w-full">
+                    <span class="label-text">{{ __('To') }}</span>
+                    <select class="select select-bordered w-full" wire:model="transfer_to_bank_account_id">
+                        <option value="">{{ __('Choose…') }}</option>
+                        @foreach ($this->accounts as $acc)
+                            <option value="{{ $acc->id }}">{{ $acc->name }} — {{ $acc->currency_code }}</option>
+                        @endforeach
+                    </select>
+                    @error('transfer_to_bank_account_id')
+                        <span class="label-text-alt text-error">{{ $message }}</span>
+                    @enderror
+                </label>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label class="form-control w-full">
+                        <span class="label-text">{{ __('Amount') }}</span>
+                        <input type="text" inputmode="decimal" class="input input-bordered w-full font-mono" wire:model="transfer_amount" placeholder="0.00" />
+                        @error('transfer_amount')
+                            <span class="label-text-alt text-error">{{ $message }}</span>
+                        @enderror
+                    </label>
+                    <label class="form-control w-full">
+                        <span class="label-text">{{ __('Date') }}</span>
+                        <input type="date" class="input input-bordered w-full" wire:model="transfer_occurred_on" />
+                        @error('transfer_occurred_on')
+                            <span class="label-text-alt text-error">{{ $message }}</span>
+                        @enderror
+                    </label>
+                </div>
+                <label class="form-control w-full">
+                    <span class="label-text">{{ __('Note') }}</span>
+                    <input type="text" class="input input-bordered w-full" wire:model="transfer_description" placeholder="{{ __('Optional') }}" />
+                    @error('transfer_description')
+                        <span class="label-text-alt text-error">{{ $message }}</span>
+                    @enderror
+                </label>
+                <div class="modal-action flex-col gap-2 sm:flex-row">
+                    <button type="button" class="btn btn-ghost w-full sm:w-auto" wire:click="closeMoveModal">{{ __('Cancel') }}</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto" wire:loading.attr="disabled">
+                        <span wire:loading.remove wire:target="saveMoveFunds">{{ __('Move funds') }}</span>
+                        <span wire:loading wire:target="saveMoveFunds" class="loading loading-spinner loading-sm"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+        <button type="button" class="modal-backdrop" wire:click="closeMoveModal" aria-label="{{ __('Close') }}"></button>
     </div>
 </div>

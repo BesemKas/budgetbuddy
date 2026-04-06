@@ -10,6 +10,9 @@ return [
 
     'dashboard_chart_months' => max(3, min(24, (int) env('BUDGET_DASHBOARD_CHART_MONTHS', 6))),
 
+    /** When planned expense usage reaches this % of plan, dashboard shows “near limit”. */
+    'dashboard_plan_near_limit_percent' => max(50, min(99, (int) env('BUDGETBUDDY_DASHBOARD_NEAR_LIMIT', 85))),
+
     'rolling_average_months' => [
         'short' => 3,
         'long' => 6,

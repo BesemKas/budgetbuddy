@@ -189,6 +189,7 @@ class BudgetAnalyticsService
             ->where('transactions.type', LedgerEntryType::Expense)
             ->whereBetween('transactions.occurred_on', [$start->toDateString(), $end->toDateString()])
             ->join('categories', 'categories.id', '=', 'transactions.category_id')
+            ->where('categories.internal_transfer', false)
             ->selectRaw('categories.id as category_id, categories.name as category_name, SUM(transactions.amount * COALESCE(transactions.exchange_rate, 1)) as total_base');
 
         if (is_array($limitToBankAccountIds)) {

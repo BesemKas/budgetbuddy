@@ -24,6 +24,7 @@ class Category extends Model
         'name',
         'type',
         'is_system',
+        'internal_transfer',
     ];
 
     /**
@@ -33,6 +34,7 @@ class Category extends Model
     {
         return [
             'is_system' => 'boolean',
+            'internal_transfer' => 'boolean',
             'type' => LedgerEntryType::class,
         ];
     }

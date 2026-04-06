@@ -14,13 +14,15 @@ class CategorySeeder extends Seeder
     public function run(): void
     {
         $defaults = [
-            ['name' => 'Salary', 'type' => LedgerEntryType::Income],
-            ['name' => 'Groceries', 'type' => LedgerEntryType::Expense],
-            ['name' => 'Rent / Bond', 'type' => LedgerEntryType::Expense],
-            ['name' => 'Transport', 'type' => LedgerEntryType::Expense],
-            ['name' => 'Utilities', 'type' => LedgerEntryType::Expense],
-            ['name' => 'Imported', 'type' => LedgerEntryType::Expense],
-            ['name' => 'Imported income', 'type' => LedgerEntryType::Income],
+            ['name' => 'Salary', 'type' => LedgerEntryType::Income, 'internal_transfer' => false],
+            ['name' => 'Groceries', 'type' => LedgerEntryType::Expense, 'internal_transfer' => false],
+            ['name' => 'Rent / Bond', 'type' => LedgerEntryType::Expense, 'internal_transfer' => false],
+            ['name' => 'Transport', 'type' => LedgerEntryType::Expense, 'internal_transfer' => false],
+            ['name' => 'Utilities', 'type' => LedgerEntryType::Expense, 'internal_transfer' => false],
+            ['name' => 'Imported', 'type' => LedgerEntryType::Expense, 'internal_transfer' => false],
+            ['name' => 'Imported income', 'type' => LedgerEntryType::Income, 'internal_transfer' => false],
+            ['name' => 'Account transfer', 'type' => LedgerEntryType::Expense, 'internal_transfer' => true],
+            ['name' => 'Account transfer', 'type' => LedgerEntryType::Income, 'internal_transfer' => true],
         ];
 
         foreach ($defaults as $row) {
@@ -30,7 +32,10 @@ class CategorySeeder extends Seeder
                     'user_id' => null,
                     'type' => $row['type']->value,
                 ],
-                ['is_system' => true]
+                [
+                    'is_system' => true,
+                    'internal_transfer' => $row['internal_transfer'],
+                ]
             );
         }
     }

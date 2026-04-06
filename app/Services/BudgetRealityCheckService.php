@@ -169,6 +169,9 @@ class BudgetRealityCheckService
             ->where('type', LedgerEntryType::Expense)
             ->whereYear('occurred_on', $year)
             ->whereMonth('occurred_on', $month)
+            ->whereHas('category', function ($q): void {
+                $q->where('internal_transfer', false);
+            })
             ->selectRaw('COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total')
             ->first();
 
@@ -185,6 +188,9 @@ class BudgetRealityCheckService
             ->where('type', LedgerEntryType::Expense)
             ->whereYear('occurred_on', $year)
             ->whereMonth('occurred_on', $month)
+            ->whereHas('category', function ($q): void {
+                $q->where('internal_transfer', false);
+            })
             ->selectRaw('COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total')
             ->first();
 
@@ -203,6 +209,8 @@ class BudgetRealityCheckService
             ->where('transactions.type', LedgerEntryType::Expense)
             ->whereYear('transactions.occurred_on', $year)
             ->whereMonth('transactions.occurred_on', $month)
+            ->join('categories', 'categories.id', '=', 'transactions.category_id')
+            ->where('categories.internal_transfer', false)
             ->join('users', 'users.id', '=', 'transactions.user_id')
             ->groupBy('transactions.user_id', 'users.name')
             ->orderBy('users.name')

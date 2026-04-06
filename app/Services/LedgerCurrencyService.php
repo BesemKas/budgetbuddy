@@ -54,7 +54,10 @@ class LedgerCurrencyService
 
         $query = Transaction::query()
             ->where('budget_id', $budget->id)
-            ->whereBetween('occurred_on', [$start->toDateString(), $end->toDateString()]);
+            ->whereBetween('occurred_on', [$start->toDateString(), $end->toDateString()])
+            ->whereHas('category', function ($q): void {
+                $q->where('internal_transfer', false);
+            });
 
         if (is_array($limitToBankAccountIds)) {
             $query->whereIn('bank_account_id', $limitToBankAccountIds);
