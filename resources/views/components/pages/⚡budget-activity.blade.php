@@ -16,7 +16,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         $budget = $currentBudget->current();
         $this->authorize('view', $budget);
-        $this->budgetName = $budget->name;
+        $this->budgetName = $budget->displayNameFor(auth()->user());
     }
 
     public function getActivitiesProperty(): \Illuminate\Support\Collection

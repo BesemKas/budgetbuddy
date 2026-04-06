@@ -2,9 +2,11 @@
 
 use App\Enums\LedgerEntryType;
 use App\Models\BankAccount;
+use App\Models\BudgetInvitation;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Services\BudgetAccountAccess;
+use App\Services\BudgetAnalyticsService;
 use App\Services\CurrentBudget;
 use App\Services\LedgerCurrencyService;
 use Illuminate\Support\Collection;
@@ -39,22 +41,52 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $budgetBaseCurrency = 'ZAR';
 
-    public function mount(LedgerCurrencyService $ledger, CurrentBudget $currentBudget): void
+    /** @var list<array{period: string, label: string, income: float, expense: float, net: float}> */
+    public array $monthlyTrend = [];
+
+    public string $avgExpense3 = '0';
+
+    public string $avgExpense6 = '0';
+
+    public string $avgIncome3 = '0';
+
+    public ?string $dailyRunway = null;
+
+    public int $daysUntilPayday = 0;
+
+    public string $nextPaydayLabel = '';
+
+    public function mount(LedgerCurrencyService $ledger, CurrentBudget $currentBudget, BudgetAnalyticsService $analytics): void
     {
         $this->privacyBlur = session('dashboard_privacy_blur', false);
         $this->quick_occurred_on = now()->toDateString();
         $this->recentTransactions = collect();
         $this->bankAccounts = collect();
-        $this->refreshData($ledger, $currentBudget);
+        $this->refreshData($ledger, $currentBudget, $analytics);
     }
 
-    public function refreshData(LedgerCurrencyService $ledger, CurrentBudget $currentBudget): void
+    public function refreshData(LedgerCurrencyService $ledger, CurrentBudget $currentBudget, BudgetAnalyticsService $analytics): void
     {
         $user = auth()->user();
         $budget = $currentBudget->current();
         $accessibleAccountIds = app(BudgetAccountAccess::class)->accessibleBankAccountIds($user, $budget);
         $this->budgetBaseCurrency = $budget->base_currency;
         $this->monthTotals = $ledger->currentMonthTotals($budget, $accessibleAccountIds);
+
+        $chartMonths = (int) config('budgetbuddy.dashboard_chart_months', 6);
+        $this->monthlyTrend = $analytics->monthlyTrend($budget, $chartMonths, $accessibleAccountIds);
+
+        $short = (int) config('budgetbuddy.rolling_average_months.short', 3);
+        $long = (int) config('budgetbuddy.rolling_average_months.long', 6);
+        $this->avgExpense3 = $analytics->rollingAverageMonthlyExpense($budget, $short, $accessibleAccountIds);
+        $this->avgExpense6 = $analytics->rollingAverageMonthlyExpense($budget, $long, $accessibleAccountIds);
+        $this->avgIncome3 = $analytics->rollingAverageMonthlyIncome($budget, $short, $accessibleAccountIds);
+
+        $this->daysUntilPayday = $analytics->daysUntilPayday($user->payday_day);
+        $next = $analytics->nextPayday($user->payday_day);
+        $this->nextPaydayLabel = $next->translatedFormat('j M Y');
+        $runway = $analytics->dailyRunway($budget, $accessibleAccountIds, $user);
+        $this->dailyRunway = $runway;
         $this->recentTransactions = Transaction::query()
             ->where('budget_id', $budget->id)
             ->whereIn('bank_account_id', $accessibleAccountIds)
@@ -146,7 +178,7 @@ new #[Layout('layouts.app')] class extends Component
         ]);
 
         $this->showQuickAdd = false;
-        $this->refreshData($ledger, $currentBudget);
+        $this->refreshData($ledger, $currentBudget, app(BudgetAnalyticsService::class));
     }
 
     public function categoriesForType(): Collection
@@ -160,12 +192,28 @@ new #[Layout('layouts.app')] class extends Component
             ->orderBy('name')
             ->get();
     }
+
+    public function getHasPendingTeamInvitationProperty(): bool
+    {
+        $user = auth()->user();
+
+        return BudgetInvitation::query()
+            ->whereRaw('LOWER(email) = ?', [strtolower($user->email)])
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->exists();
+    }
 };
 ?>
 
 <div class="mx-auto max-w-5xl px-4 py-6">
     @if (session('status'))
         <div role="status" class="alert alert-success alert-soft mb-4 text-sm">{{ session('status') }}</div>
+    @endif
+    @if ($this->hasPendingTeamInvitation)
+        <div role="status" class="alert alert-info mb-4 text-sm">
+            {{ __('You have a pending budget invitation. Open the link in the email we sent to :email to join the team. You can keep using your personal budget until you accept.', ['email' => auth()->user()->email]) }}
+        </div>
     @endif
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -216,6 +264,60 @@ new #[Layout('layouts.app')] class extends Component
                 {{ number_format((float) $monthTotals['net'], 2) }}
             </div>
             <div class="stat-desc">{{ __('Income minus expenses (base currency)') }}</div>
+        </div>
+    </div>
+
+    <div class="mt-8 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div class="card bg-base-100 border border-base-300/60 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-lg">{{ __('Income & expenses by month') }}</h2>
+                <p class="text-base-content/60 text-xs">{{ __('Last :n full calendar months (base currency).', ['n' => config('budgetbuddy.dashboard_chart_months')]) }}</p>
+                <div
+                    wire:key="dash-chart-{{ md5(json_encode($monthlyTrend)) }}"
+                    wire:ignore
+                    class="bb-dashboard-chart mt-2 min-h-[280px] w-full"
+                    data-labels='@json(array_column($monthlyTrend, 'label'))'
+                    data-income='@json(array_column($monthlyTrend, 'income'))'
+                    data-expense='@json(array_column($monthlyTrend, 'expense'))'
+                    data-currency="{{ e($budgetBaseCurrency) }}"
+                    data-income-label="{{ e(__('Income')) }}"
+                    data-expense-label="{{ e(__('Expenses')) }}"
+                ></div>
+            </div>
+        </div>
+        <div class="card bg-base-100 border border-base-300/60 shadow-sm">
+            <div class="card-body gap-3">
+                <h2 class="card-title text-lg">{{ __('Averages & runway') }}</h2>
+                <dl class="grid grid-cols-1 gap-3 text-sm">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300/40 pb-2">
+                        <dt>{{ __('Avg monthly expenses (:n mo)', ['n' => config('budgetbuddy.rolling_average_months.short')]) }}</dt>
+                        <dd class="font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format((float) $avgExpense3, 2) }} {{ $budgetBaseCurrency }}</dd>
+                    </div>
+                    <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300/40 pb-2">
+                        <dt>{{ __('Avg monthly expenses (:n mo)', ['n' => config('budgetbuddy.rolling_average_months.long')]) }}</dt>
+                        <dd class="font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format((float) $avgExpense6, 2) }} {{ $budgetBaseCurrency }}</dd>
+                    </div>
+                    <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300/40 pb-2">
+                        <dt>{{ __('Avg monthly income (:n mo)', ['n' => config('budgetbuddy.rolling_average_months.short')]) }}</dt>
+                        <dd class="font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">{{ number_format((float) $avgIncome3, 2) }} {{ $budgetBaseCurrency }}</dd>
+                    </div>
+                    <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300/40 pb-2">
+                        <dt>{{ __('Next payday') }}</dt>
+                        <dd>{{ $nextPaydayLabel }} ({{ trans_choice(':count day|:count days', $daysUntilPayday, ['count' => $daysUntilPayday]) }})</dd>
+                    </div>
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <dt>{{ __('Daily runway') }}</dt>
+                        <dd class="text-right font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                            @if ($dailyRunway === null)
+                                {{ __('—') }}
+                            @else
+                                {{ number_format((float) $dailyRunway, 2) }} {{ $budgetBaseCurrency }}
+                            @endif
+                        </dd>
+                    </div>
+                </dl>
+                <p class="text-base-content/60 text-xs">{{ __('Runway divides total cash across accessible accounts (in base currency) by days until payday. Set payday in Settings.') }}</p>
+            </div>
         </div>
     </div>
 

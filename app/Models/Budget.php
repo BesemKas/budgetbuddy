@@ -76,6 +76,14 @@ class Budget extends Model
         return $this->hasMany(BudgetInvitation::class);
     }
 
+    /**
+     * @return HasMany<BudgetSnapshot, $this>
+     */
+    public function snapshots(): HasMany
+    {
+        return $this->hasMany(BudgetSnapshot::class);
+    }
+
     public function roleFor(User $user): ?BudgetRole
     {
         $pivot = $this->users()->where('users.id', $user->id)->first()?->pivot;
@@ -85,6 +93,28 @@ class Budget extends Model
         }
 
         return BudgetRole::from($pivot->role);
+    }
+
+    /**
+     * Shared budgets show as the owner's name plus "team" (e.g. "Pete's team"), not the stored DB title.
+     */
+    public function teamLabel(): string
+    {
+        $this->loadMissing('owner');
+
+        return __(":name's team", ['name' => $this->owner?->name ?? __('Team')]);
+    }
+
+    /**
+     * Label in the budget switcher: "Personal" for your own budget, or :owner's team when you are a member.
+     */
+    public function displayNameFor(User $viewer): string
+    {
+        if ((int) $this->owner_user_id === (int) $viewer->id) {
+            return __('Personal');
+        }
+
+        return $this->teamLabel();
     }
 
     public static function bootstrapPersonalForUser(User $user): self

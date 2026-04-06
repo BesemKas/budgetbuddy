@@ -19,6 +19,8 @@ class CategorySeeder extends Seeder
             ['name' => 'Rent / Bond', 'type' => LedgerEntryType::Expense],
             ['name' => 'Transport', 'type' => LedgerEntryType::Expense],
             ['name' => 'Utilities', 'type' => LedgerEntryType::Expense],
+            ['name' => 'Imported', 'type' => LedgerEntryType::Expense],
+            ['name' => 'Imported income', 'type' => LedgerEntryType::Income],
         ];
 
         foreach ($defaults as $row) {

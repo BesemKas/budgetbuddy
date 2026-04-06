@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'base_currency',
+        'payday_day',
     ];
 
     /**
@@ -42,6 +43,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'base_currency' => 'string',
+            'payday_day' => 'integer',
         ];
     }
 

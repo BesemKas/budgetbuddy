@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Budget;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CurrentBudget
 {
@@ -50,7 +51,12 @@ class CurrentBudget
 
     public function switchTo(Budget $budget, User $user): void
     {
-        if (! $user->budgets()->where('budgets.id', $budget->id)->exists()) {
+        $isMember = DB::table('budget_user')
+            ->where('budget_id', $budget->id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if (! $isMember) {
             abort(403);
         }
 

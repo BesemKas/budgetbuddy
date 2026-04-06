@@ -1,4 +1,4 @@
-{{ __(':name invited you to collaborate on the budget “:budget”.', ['name' => $invitation->invitedBy->name, 'budget' => $invitation->budget->name]) }}
+{{ __(':name invited you to collaborate on the budget “:budget”.', ['name' => $invitation->invitedBy->name, 'budget' => $invitation->budget->teamLabel()]) }}
 
 {{ __('Shared accounts:') }}
 

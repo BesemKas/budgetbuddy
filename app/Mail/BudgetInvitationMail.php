@@ -22,7 +22,7 @@ class BudgetInvitationMail extends Mailable
     {
         return new Envelope(
             subject: __('You are invited to join :budget on Budget Buddy', [
-                'budget' => $this->invitation->budget->name,
+                'budget' => $this->invitation->budget->teamLabel(),
             ]),
         );
     }

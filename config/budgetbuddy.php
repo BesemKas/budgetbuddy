@@ -8,6 +8,13 @@ return [
 
     'invitation_ttl_days' => (int) env('BUDGET_INVITATION_TTL_DAYS', 7),
 
+    'dashboard_chart_months' => max(3, min(24, (int) env('BUDGET_DASHBOARD_CHART_MONTHS', 6))),
+
+    'rolling_average_months' => [
+        'short' => 3,
+        'long' => 6,
+    ],
+
     'currency_codes' => [
         'ZAR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'CHF', 'JPY', 'CNY', 'INR', 'NZD', 'SEK', 'NOK',
     ],

@@ -140,7 +140,7 @@ class BudgetInvitationService
             ]);
         }
 
-        return DB::transaction(function () use ($invitation, $user): Budget {
+        $budget = DB::transaction(function () use ($invitation, $user): Budget {
             $budget = $invitation->budget;
             $invitation->load('bankAccounts');
 
@@ -173,10 +173,12 @@ class BudgetInvitationService
                 ])
                 ->log('budget_invitation_accepted');
 
-            $this->currentBudget->switchTo($budget, $user);
-
             return $budget;
         });
+
+        $this->currentBudget->switchTo($budget, User::query()->findOrFail($user->id));
+
+        return $budget;
     }
 
     /**
