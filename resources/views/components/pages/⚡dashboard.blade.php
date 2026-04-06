@@ -77,6 +77,9 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $previousMonthNet = '0';
 
+    /** True when the user has accounts but none are marked for budget/dashboard totals. */
+    public bool $allAccountsExcludedFromReports = false;
+
     public ?string $liquidityAlertMessage = null;
 
     public ?string $zeroBasedAlertMessage = null;
@@ -94,38 +97,41 @@ new #[Layout('layouts.app')] class extends Component
     {
         $user = auth()->user();
         $budget = $currentBudget->current();
-        $accessibleAccountIds = app(BudgetAccountAccess::class)->accessibleBankAccountIds($user, $budget);
+        $accountAccess = app(BudgetAccountAccess::class);
+        $accessibleAccountIds = $accountAccess->accessibleBankAccountIds($user, $budget);
+        $reportingAccountIds = $accountAccess->reportingBankAccountIds($user, $budget);
+        $this->allAccountsExcludedFromReports = $accessibleAccountIds !== [] && $reportingAccountIds === [];
         $this->budgetBaseCurrency = $budget->base_currency;
-        $this->monthTotals = $ledger->currentMonthTotals($budget, $accessibleAccountIds);
+        $this->monthTotals = $ledger->currentMonthTotals($budget, $reportingAccountIds);
 
         $chartMonths = (int) config('budgetbuddy.dashboard_chart_months', 6);
-        $this->monthlyTrend = $analytics->monthlyTrend($budget, $chartMonths, $accessibleAccountIds);
+        $this->monthlyTrend = $analytics->monthlyTrend($budget, $chartMonths, $reportingAccountIds);
 
         $short = (int) config('budgetbuddy.rolling_average_months.short', 3);
         $long = (int) config('budgetbuddy.rolling_average_months.long', 6);
-        $this->avgExpense3 = $analytics->rollingAverageMonthlyExpense($budget, $short, $accessibleAccountIds);
-        $this->avgExpense6 = $analytics->rollingAverageMonthlyExpense($budget, $long, $accessibleAccountIds);
-        $this->avgIncome3 = $analytics->rollingAverageMonthlyIncome($budget, $short, $accessibleAccountIds);
+        $this->avgExpense3 = $analytics->rollingAverageMonthlyExpense($budget, $short, $reportingAccountIds);
+        $this->avgExpense6 = $analytics->rollingAverageMonthlyExpense($budget, $long, $reportingAccountIds);
+        $this->avgIncome3 = $analytics->rollingAverageMonthlyIncome($budget, $short, $reportingAccountIds);
 
         $this->daysUntilPayday = $analytics->daysUntilPayday($user->payday_day);
         $next = $analytics->nextPayday($user->payday_day);
         $this->nextPaydayLabel = $next->translatedFormat('j M Y');
-        $runway = $analytics->dailyRunway($budget, $accessibleAccountIds, $user);
+        $runway = $analytics->dailyRunway($budget, $reportingAccountIds, $user);
         $this->dailyRunway = $runway;
 
-        $this->categoryExpenseBreakdown = $analytics->currentMonthExpenseByCategory($budget, $accessibleAccountIds);
+        $this->categoryExpenseBreakdown = $analytics->currentMonthExpenseByCategory($budget, $reportingAccountIds);
 
         $y = (int) now()->year;
         $m = (int) now()->month;
         $reality = app(BudgetRealityCheckService::class);
         $this->monthPlannedSpend = $reality->totalBudgetedForMonth($budget, $y, $m);
-        $this->monthActualExpenseBase = $reality->totalExpenseInBaseForMonth($budget, $y, $m);
+        $this->monthActualExpenseBase = $reality->totalExpenseInBaseForMonth($budget, $y, $m, $reportingAccountIds);
         $this->showMonthSweepPrompt = $this->shouldShowMonthSweepPrompt($user);
 
         $this->liquidityAlertMessage = null;
         $this->zeroBasedAlertMessage = null;
         $mode = $user->smart_mode ?? SmartMode::Standard;
-        $liquidity = $reality->liquidityAssessment($budget, $y, $m);
+        $liquidity = $reality->liquidityAssessment($budget, $y, $m, $reportingAccountIds);
         $zeroBased = $reality->zeroBasedAssessment($budget, $y, $m);
 
         if (
@@ -147,20 +153,22 @@ new #[Layout('layouts.app')] class extends Component
 
         $prevStart = Carbon::now()->subMonth()->startOfMonth();
         $prevEnd = $prevStart->copy()->endOfMonth();
-        $prevTotals = $ledger->periodTotalsInBase($budget, $prevStart, $prevEnd, $accessibleAccountIds);
+        $prevTotals = $ledger->periodTotalsInBase($budget, $prevStart, $prevEnd, $reportingAccountIds);
         $this->previousMonthLabel = $prevStart->translatedFormat('F Y');
         $this->previousMonthIncome = $prevTotals['income'];
         $this->previousMonthExpense = $prevTotals['expense'];
         $this->previousMonthNet = $prevTotals['net'];
 
-        $this->recentTransactions = Transaction::query()
-            ->where('budget_id', $budget->id)
-            ->whereIn('bank_account_id', $accessibleAccountIds)
-            ->with(['bankAccount', 'category', 'user'])
-            ->latest('occurred_on')
-            ->latest('id')
-            ->limit(15)
-            ->get();
+        $this->recentTransactions = $reportingAccountIds === []
+            ? collect()
+            : Transaction::query()
+                ->where('budget_id', $budget->id)
+                ->whereIn('bank_account_id', $reportingAccountIds)
+                ->with(['bankAccount', 'category', 'user'])
+                ->latest('occurred_on')
+                ->latest('id')
+                ->limit(15)
+                ->get();
 
         $this->bankAccounts = BankAccount::query()
             ->where('budget_id', $budget->id)
@@ -417,6 +425,13 @@ new #[Layout('layouts.app')] class extends Component
     @if ($this->hasPendingTeamInvitation)
         <div role="status" class="alert alert-info mb-4 text-sm">
             {{ __('You have a pending budget invitation. Open the link in the email we sent to :email to join the team. You can keep using your personal budget until you accept.', ['email' => auth()->user()->email]) }}
+        </div>
+    @endif
+    @if ($this->allAccountsExcludedFromReports)
+        <div role="alert" class="alert alert-warning mb-4 text-sm">
+            {{ __('No bank accounts are included in budget totals. Open ') }}
+            <a href="{{ route('accounts.index') }}" wire:navigate class="link link-primary">{{ __('Bank accounts') }}</a>
+            {{ __(' and turn on “Include in budget & dashboard” for at least one account.') }}
         </div>
     @endif
     @if ($this->showMonthSweepPrompt)

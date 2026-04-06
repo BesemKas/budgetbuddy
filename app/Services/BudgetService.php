@@ -40,9 +40,9 @@ class BudgetService
      *     shortfall_base: string
      * }
      */
-    public function checkBudgetLiquidity(Budget $budget, int $year, int $month): array
+    public function checkBudgetLiquidity(Budget $budget, int $year, int $month, ?array $limitToBankAccountIds = null): array
     {
-        return $this->reality->liquidityAssessment($budget, $year, $month);
+        return $this->reality->liquidityAssessment($budget, $year, $month, $limitToBankAccountIds);
     }
 
     /**
@@ -59,8 +59,8 @@ class BudgetService
      *     is_future_month: bool
      * }|null
      */
-    public function getVelocity(Budget $budget, int $categoryId, int $year, int $month): ?array
+    public function getVelocity(Budget $budget, int $categoryId, int $year, int $month, ?array $limitToBankAccountIds = null): ?array
     {
-        return $this->reality->categorySpendPace($budget, $categoryId, $year, $month);
+        return $this->reality->categorySpendPace($budget, $categoryId, $year, $month, $limitToBankAccountIds);
     }
 }

@@ -38,6 +38,8 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $kind = 'liquid';
 
+    public bool $include_in_budget_reports = true;
+
     public function openCreate(CurrentBudget $currentBudget): void
     {
         $this->authorize('create', BankAccount::class);
@@ -47,6 +49,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->currency_code = $currentBudget->current()->base_currency;
         $this->exchange_rate = '';
         $this->kind = BankAccountKind::Liquid->value;
+        $this->include_in_budget_reports = true;
         $this->showModal = true;
     }
 
@@ -61,6 +64,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->currency_code = $account->currency_code;
         $this->exchange_rate = $account->exchange_rate !== null ? (string) $account->exchange_rate : '';
         $this->kind = $account->kind->value;
+        $this->include_in_budget_reports = $account->include_in_budget_reports;
         $this->showModal = true;
     }
 
@@ -154,6 +158,7 @@ new #[Layout('layouts.app')] class extends Component
             'kind' => ['required', 'string', Rule::enum(BankAccountKind::class)],
             'currency_code' => ['required', 'string', 'size:3'],
             'exchange_rate' => ['nullable', 'numeric', 'min:0.00000001'],
+            'include_in_budget_reports' => ['boolean'],
         ]);
 
         $user = auth()->user();
@@ -180,6 +185,7 @@ new #[Layout('layouts.app')] class extends Component
                 'kind' => BankAccountKind::from($this->kind),
                 'currency_code' => $code,
                 'balance' => '0',
+                'include_in_budget_reports' => $this->include_in_budget_reports,
                 'exchange_rate' => $rate !== null ? number_format((float) $rate, 8, '.', '') : null,
             ]);
         } else {
@@ -189,6 +195,7 @@ new #[Layout('layouts.app')] class extends Component
                 'name' => $this->name,
                 'kind' => BankAccountKind::from($this->kind),
                 'currency_code' => $code,
+                'include_in_budget_reports' => $this->include_in_budget_reports,
                 'exchange_rate' => $rate !== null ? number_format((float) $rate, 8, '.', '') : null,
             ]);
         }
@@ -259,6 +266,7 @@ new #[Layout('layouts.app')] class extends Component
                             <th>{{ __('Currency') }}</th>
                             <th class="text-end">{{ __('Rate to base') }}</th>
                             <th class="text-end">{{ __('Balance') }}</th>
+                            <th>{{ __('Budget totals') }}</th>
                             <th class="text-end">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -282,6 +290,13 @@ new #[Layout('layouts.app')] class extends Component
                                     @endif
                                 </td>
                                 <td class="text-end font-mono">{{ number_format((float) $account->balance, 2) }}</td>
+                                <td>
+                                    @if ($account->include_in_budget_reports)
+                                        <span class="badge badge-success badge-sm">{{ __('Yes') }}</span>
+                                    @else
+                                        <span class="badge badge-ghost badge-sm">{{ __('No') }}</span>
+                                    @endif
+                                </td>
                                 <td class="text-end">
                                     @can('update', $account)
                                         <div class="join join-horizontal">
@@ -302,7 +317,7 @@ new #[Layout('layouts.app')] class extends Component
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-base-content/60">{{ __('No accounts yet.') }}</td>
+                                <td colspan="7" class="text-base-content/60">{{ __('No accounts yet.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -332,6 +347,14 @@ new #[Layout('layouts.app')] class extends Component
                     @error('kind')
                         <span class="label-text-alt text-error">{{ $message }}</span>
                     @enderror
+                </label>
+
+                <label class="label cursor-pointer justify-start gap-3 py-1">
+                    <input type="checkbox" class="checkbox checkbox-primary" wire:model="include_in_budget_reports" />
+                    <span class="flex flex-col gap-0.5">
+                        <span class="label-text font-medium">{{ __('Include in budget & dashboard') }}</span>
+                        <span class="text-xs text-base-content/70">{{ __('Dashboard totals, charts, plan vs actual, and pace use only accounts with this on. Turn off for accounts you do not want in your monthly budget view (e.g. long-term savings).') }}</span>
+                    </span>
                 </label>
 
                 <label class="form-control w-full">

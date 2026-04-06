@@ -19,11 +19,22 @@ class BudgetRealityCheckService
 
     /**
      * Sum of liquid account balances in the budget base currency (cheque, savings, cash — not credit cards).
+     *
+     * @param  list<int>|null  $onlyBankAccountIds  If set, only these accounts (must be in the budget). Empty list yields zero.
      */
-    public function totalLiquidBalanceInBase(Budget $budget): string
+    public function totalLiquidBalanceInBase(Budget $budget, ?array $onlyBankAccountIds = null): string
     {
+        if (is_array($onlyBankAccountIds) && $onlyBankAccountIds === []) {
+            return '0';
+        }
+
+        $query = $budget->bankAccounts()->where('kind', BankAccountKind::Liquid);
+        if (is_array($onlyBankAccountIds)) {
+            $query->whereIn('id', $onlyBankAccountIds);
+        }
+
         $total = '0';
-        foreach ($budget->bankAccounts()->where('kind', BankAccountKind::Liquid)->cursor() as $account) {
+        foreach ($query->cursor() as $account) {
             $rate = $this->ledgerCurrency->effectiveRateToBase($account, $budget);
             $inBase = bcmul((string) $account->balance, $rate, 4);
             $total = bcadd($total, $inBase, 4);
@@ -52,6 +63,7 @@ class BudgetRealityCheckService
     }
 
     /**
+     * @param  list<int>|null  $limitToBankAccountIds  Liquid cash considered: all liquid accounts (null) or only these IDs (e.g. reporting accounts).
      * @return array{
      *     total_liquid_base: string,
      *     total_budgeted: string,
@@ -59,9 +71,9 @@ class BudgetRealityCheckService
      *     shortfall_base: string
      * }
      */
-    public function liquidityAssessment(Budget $budget, int $year, int $month): array
+    public function liquidityAssessment(Budget $budget, int $year, int $month, ?array $limitToBankAccountIds = null): array
     {
-        $liquid = $this->totalLiquidBalanceInBase($budget);
+        $liquid = $this->totalLiquidBalanceInBase($budget, $limitToBankAccountIds);
         $budgeted = $this->totalBudgetedForMonth($budget, $year, $month);
         $cmp = bccomp($budgeted, $liquid, 4);
         $isFunded = $cmp <= 0;
@@ -161,9 +173,16 @@ class BudgetRealityCheckService
     /**
      * Sum of expense transactions for a category in a calendar month, in budget base currency.
      */
-    public function sumCategoryExpenseInBaseForMonth(int $budgetId, int $categoryId, int $year, int $month): string
+    /**
+     * @param  list<int>|null  $limitToBankAccountIds
+     */
+    public function sumCategoryExpenseInBaseForMonth(int $budgetId, int $categoryId, int $year, int $month, ?array $limitToBankAccountIds = null): string
     {
-        $row = Transaction::query()
+        if (is_array($limitToBankAccountIds) && $limitToBankAccountIds === []) {
+            return '0';
+        }
+
+        $query = Transaction::query()
             ->where('budget_id', $budgetId)
             ->where('category_id', $categoryId)
             ->where('type', LedgerEntryType::Expense)
@@ -171,28 +190,42 @@ class BudgetRealityCheckService
             ->whereMonth('occurred_on', $month)
             ->whereHas('category', function ($q): void {
                 $q->where('internal_transfer', false);
-            })
-            ->selectRaw('COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total')
-            ->first();
+            });
+
+        if (is_array($limitToBankAccountIds)) {
+            $query->whereIn('bank_account_id', $limitToBankAccountIds);
+        }
+
+        $row = $query->selectRaw('COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total')->first();
 
         return $this->normalizeDecimal($row->total ?? '0');
     }
 
     /**
      * Total expense transactions for the month in budget base currency.
+     *
+     * @param  list<int>|null  $limitToBankAccountIds
      */
-    public function totalExpenseInBaseForMonth(Budget $budget, int $year, int $month): string
+    public function totalExpenseInBaseForMonth(Budget $budget, int $year, int $month, ?array $limitToBankAccountIds = null): string
     {
-        $row = Transaction::query()
+        if (is_array($limitToBankAccountIds) && $limitToBankAccountIds === []) {
+            return '0';
+        }
+
+        $query = Transaction::query()
             ->where('budget_id', $budget->id)
             ->where('type', LedgerEntryType::Expense)
             ->whereYear('occurred_on', $year)
             ->whereMonth('occurred_on', $month)
             ->whereHas('category', function ($q): void {
                 $q->where('internal_transfer', false);
-            })
-            ->selectRaw('COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total')
-            ->first();
+            });
+
+        if (is_array($limitToBankAccountIds)) {
+            $query->whereIn('bank_account_id', $limitToBankAccountIds);
+        }
+
+        $row = $query->selectRaw('COALESCE(SUM(amount * COALESCE(exchange_rate, 1)), 0) as total')->first();
 
         return $this->normalizeDecimal($row->total ?? '0');
     }
@@ -202,16 +235,29 @@ class BudgetRealityCheckService
      *
      * @return Collection<int, array{user_id: int, user_name: string, total_base: string}>
      */
-    public function expenseTotalsByUserForMonth(Budget $budget, int $year, int $month): Collection
+    /**
+     * @param  list<int>|null  $limitToBankAccountIds
+     */
+    public function expenseTotalsByUserForMonth(Budget $budget, int $year, int $month, ?array $limitToBankAccountIds = null): Collection
     {
-        $rows = Transaction::query()
+        if (is_array($limitToBankAccountIds) && $limitToBankAccountIds === []) {
+            return collect();
+        }
+
+        $query = Transaction::query()
             ->where('transactions.budget_id', $budget->id)
             ->where('transactions.type', LedgerEntryType::Expense)
             ->whereYear('transactions.occurred_on', $year)
             ->whereMonth('transactions.occurred_on', $month)
             ->join('categories', 'categories.id', '=', 'transactions.category_id')
             ->where('categories.internal_transfer', false)
-            ->join('users', 'users.id', '=', 'transactions.user_id')
+            ->join('users', 'users.id', '=', 'transactions.user_id');
+
+        if (is_array($limitToBankAccountIds)) {
+            $query->whereIn('transactions.bank_account_id', $limitToBankAccountIds);
+        }
+
+        $rows = $query
             ->groupBy('transactions.user_id', 'users.name')
             ->orderBy('users.name')
             ->selectRaw('transactions.user_id as user_id, users.name as user_name, COALESCE(SUM(transactions.amount * COALESCE(transactions.exchange_rate, 1)), 0) as total_base')
@@ -238,7 +284,10 @@ class BudgetRealityCheckService
      *     is_future_month: bool
      * }|null
      */
-    public function categorySpendPace(Budget $budget, int $categoryId, int $year, int $month): ?array
+    /**
+     * @param  list<int>|null  $limitToBankAccountIds
+     */
+    public function categorySpendPace(Budget $budget, int $categoryId, int $year, int $month, ?array $limitToBankAccountIds = null): ?array
     {
         $line = CategoryMonthBudget::query()
             ->where('budget_id', $budget->id)
@@ -256,7 +305,7 @@ class BudgetRealityCheckService
             return null;
         }
 
-        $spent = $this->sumCategoryExpenseInBaseForMonth($budget->id, $categoryId, $year, $month);
+        $spent = $this->sumCategoryExpenseInBaseForMonth($budget->id, $categoryId, $year, $month, $limitToBankAccountIds);
 
         $monthStart = Carbon::createFromDate($year, $month, 1)->startOfDay();
         $monthEnd = $monthStart->copy()->endOfMonth();

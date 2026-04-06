@@ -27,6 +27,7 @@ class BankAccountFactory extends Factory
             'kind' => BankAccountKind::Liquid,
             'currency_code' => 'ZAR',
             'balance' => '0',
+            'include_in_budget_reports' => true,
             'exchange_rate' => null,
         ];
     }

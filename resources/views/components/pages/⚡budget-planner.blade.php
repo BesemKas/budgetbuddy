@@ -10,6 +10,7 @@ use App\Models\BudgetMonthSummary;
 use App\Models\Category;
 use App\Models\CategoryMonthBudget;
 use App\Models\SinkingFundRule;
+use App\Services\BudgetAccountAccess;
 use App\Services\BudgetInAppNotifier;
 use App\Services\BudgetMonthCopyService;
 use App\Services\BudgetNotificationService;
@@ -222,10 +223,13 @@ new #[Layout('layouts.app')] class extends Component
      */
     public function whoSpentWhat(): \Illuminate\Support\Collection
     {
+        $budget = app(CurrentBudget::class)->current();
+
         return app(BudgetRealityCheckService::class)->expenseTotalsByUserForMonth(
-            app(CurrentBudget::class)->current(),
+            $budget,
             $this->year,
-            $this->month
+            $this->month,
+            app(BudgetAccountAccess::class)->reportingBankAccountIds(auth()->user(), $budget)
         );
     }
 
@@ -427,11 +431,14 @@ new #[Layout('layouts.app')] class extends Component
      */
     public function categoryPace(int $categoryId): ?array
     {
+        $budget = app(CurrentBudget::class)->current();
+
         return app(BudgetService::class)->getVelocity(
-            app(CurrentBudget::class)->current(),
+            $budget,
             $categoryId,
             $this->year,
-            $this->month
+            $this->month,
+            app(BudgetAccountAccess::class)->reportingBankAccountIds(auth()->user(), $budget)
         );
     }
 

@@ -25,6 +25,7 @@ class BankAccount extends Model
         'kind',
         'currency_code',
         'balance',
+        'include_in_budget_reports',
         'exchange_rate',
     ];
 
@@ -36,6 +37,7 @@ class BankAccount extends Model
         return [
             'kind' => BankAccountKind::class,
             'balance' => 'decimal:4',
+            'include_in_budget_reports' => 'boolean',
             'exchange_rate' => 'decimal:8',
         ];
     }

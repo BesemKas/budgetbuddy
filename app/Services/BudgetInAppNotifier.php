@@ -10,6 +10,7 @@ use App\Models\Budget;
 use App\Models\Category;
 use App\Models\CategoryMonthBudget;
 use App\Models\Transaction;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
@@ -101,7 +102,19 @@ class BudgetInAppNotifier
             return;
         }
 
-        $spent = $this->realityCheck->sumCategoryExpenseInBaseForMonth($budget->id, $transaction->category_id, $year, $month);
+        $actor = User::query()->find($transaction->user_id);
+        if ($actor === null) {
+            return;
+        }
+
+        $reportingIds = app(BudgetAccountAccess::class)->reportingBankAccountIds($actor, $budget);
+        $spent = $this->realityCheck->sumCategoryExpenseInBaseForMonth(
+            $budget->id,
+            $transaction->category_id,
+            $year,
+            $month,
+            $reportingIds
+        );
         $budgetAmount = (string) $line->amount;
 
         $cacheKey = $this->monthlyCategoryCacheKey($budget->id, $transaction->category_id, $year, $month);
