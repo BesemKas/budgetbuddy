@@ -26,4 +26,9 @@ enum BudgetRole: string
     {
         return $this === self::Owner;
     }
+
+    public function canEditMonthlyBudget(): bool
+    {
+        return $this === self::Owner;
+    }
 }
