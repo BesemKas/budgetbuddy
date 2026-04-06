@@ -84,6 +84,22 @@ class Budget extends Model
         return $this->hasMany(BudgetSnapshot::class);
     }
 
+    /**
+     * @return HasMany<BudgetMonthSummary, $this>
+     */
+    public function monthSummaries(): HasMany
+    {
+        return $this->hasMany(BudgetMonthSummary::class);
+    }
+
+    /**
+     * @return HasMany<CategoryMonthBudget, $this>
+     */
+    public function categoryMonthBudgets(): HasMany
+    {
+        return $this->hasMany(CategoryMonthBudget::class);
+    }
+
     public function roleFor(User $user): ?BudgetRole
     {
         $pivot = $this->users()->where('users.id', $user->id)->first()?->pivot;

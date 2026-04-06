@@ -62,6 +62,14 @@ class Category extends Model
     }
 
     /**
+     * @return HasMany<CategoryMonthBudget, $this>
+     */
+    public function monthBudgets(): HasMany
+    {
+        return $this->hasMany(CategoryMonthBudget::class);
+    }
+
+    /**
      * System defaults plus custom categories for the budget.
      *
      * @param  Builder<Category>  $query

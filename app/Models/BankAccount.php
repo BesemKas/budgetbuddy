@@ -61,6 +61,14 @@ class BankAccount extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    /**
+     * @return HasMany<CategoryMonthBudget, $this>
+     */
+    public function categoryMonthBudgets(): HasMany
+    {
+        return $this->hasMany(CategoryMonthBudget::class);
+    }
+
     public function recalculateBalanceFromTransactions(): void
     {
         $income = (string) $this->transactions()
