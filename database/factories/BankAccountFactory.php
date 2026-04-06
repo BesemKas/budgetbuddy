@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\BankAccountKind;
 use App\Models\BankAccount;
 use App\Models\Budget;
 use App\Models\User;
@@ -23,6 +24,7 @@ class BankAccountFactory extends Factory
             'user_id' => User::factory(),
             'budget_id' => null,
             'name' => fake()->company(),
+            'kind' => BankAccountKind::Liquid,
             'currency_code' => 'ZAR',
             'balance' => '0',
             'exchange_rate' => null,

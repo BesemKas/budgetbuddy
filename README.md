@@ -1,106 +1,274 @@
 # Budget Buddy
 
-Budget Buddy is a web application for personal and household money management: accounts, categories, transactions, and shared access with a partner. The long-term direction is to move from simple tracking toward proactive budgeting, liquidity checks, and timely feedback when plans and spending diverge.
+Budget Buddy is a web application for personal and household money management. You can track accounts in multiple currencies, categorize income and expenses, plan monthly category budgets, import bank files, share selected accounts with a partner, and review activity and long-term trends.
+
+**About this manual.** The `/docs` folder is listed in `.gitignore`, so it is not part of a typical clone of this repository. **This README is the canonical user and operator guide**: usage, how-tos, customization, and troubleshooting. Anything that only existed under `/docs` is not available from Git alone.
 
 This repository is licensed under the MIT License; see the [LICENSE](LICENSE) file.
 
 ---
 
-## For users
+## Table of contents
 
-**What you can use it for**
-
-- Track bank accounts (including multiple currencies) and keep balances in step with your transactions.
-- Organize spending with categories (defaults plus your own).
-- Record income and expenses quickly and see summaries on the dashboard.
-- Work with someone else on the same budget using invitations and roles (for example, owner versus viewer), with an activity history for shared spaces.
-
-**Privacy and comfort**
-
-- The app supports a privacy-oriented view on the dashboard (for example, blurring sensitive figures) so you can use it in shared spaces more comfortably.
-
-**Where the product is headed**
-
-Detailed plans describe richer budgeting (monthly targets per category, linking budgets to accounts, copy-from-previous-month), checks that compare your plan to real balances and spending pace, optional real-time alerts when limits or liquidity are at risk, and more automation around month-end and joint use. Those ideas are spelled out in the documents linked under [Roadmap and planning documents](#roadmap-and-planning-documents) below.
+1. [Core concepts](#core-concepts)
+2. [Signing in](#signing-in)
+3. [Navigation and budgets](#navigation-and-budgets)
+4. [Training manual by screen](#training-manual-by-screen)
+5. [How-tos](#how-tos)
+6. [Customization and configuration](#customization-and-configuration)
+7. [Troubleshooting](#troubleshooting)
+8. [Developers and self-hosting](#developers-and-self-hosting)
+9. [Security](#security)
 
 ---
 
-## For developers
+## Core concepts
 
-**Stack (this repo)**
+- **Budget (workspace)**  
+  A budget groups bank accounts, categories, transactions, monthly plans, and snapshots. You might have one budget for yourself and another if you participate in someone else’s budget. The **base currency** is set for each budget (often ZAR) and is used to compare totals across accounts.
 
-- PHP 8.2+, Laravel 12
-- Livewire 4, Vite, Tailwind CSS v4, daisyUI 5
-- Pest for tests; Laravel Pint for code style
-- Packages in use include Spatie Permission, Spatie Activity Log, Maatwebsite Excel, and Blade Lucide icons (see `composer.json` and `package.json`).
+- **Bank account**  
+  A real or logical account (cheque, savings, credit card, and so on) with a **currency** and optional **exchange rate** to the budget base currency when the currency differs. **Kind** is either liquid cash accounts or credit. Balances move when you add or import transactions.
 
-**Prerequisites**
+- **Category**  
+  Income and expense labels (defaults plus any you add). Transactions and imports assign spending to categories.
 
-- PHP 8.2+, Composer, Node.js and npm, and a database supported by Laravel (for example MySQL).
+- **Transaction**  
+  A dated entry with amount, type (income or expense), account, category, and optional description. Quick Add on the dashboard creates transactions; imports create many at once.
 
-**Getting started**
-
-1. Clone the repository and copy `.env.example` to `.env`.
-2. Run `composer install` and `php artisan key:generate`.
-3. Configure your database and mail settings in `.env` (the project was designed with MySQL and SMTP-friendly hosting in mind).
-4. Run migrations: `php artisan migrate`.
-5. Install frontend dependencies and build assets: `npm install`, then `npm run build` (or `npm run dev` while developing).
-
-**Tests**
-
-- Run the test suite with: `php artisan test --compact`
-- Prefer targeted runs while iterating, for example: `php artisan test --compact --filter=YourTestName`
-
-**Formatting**
-
-- Format changed PHP code with Pint: `vendor/bin/pint --dirty`
-
-**Further reading**
-
-- Laravel: [https://laravel.com/docs](https://laravel.com/docs)
-- Livewire: [https://livewire.laravel.com/docs](https://livewire.laravel.com/docs)
+- **Roles on a shared budget**  
+  Owners can invite others. Invited users are **viewers** for only the accounts you select; they keep their **own separate personal budget** for their private data.
 
 ---
 
-## Roadmap and planning documents
+## Signing in
 
-Implementation is described in two complementary tracks:
+1. Open the app URL your administrator gave you.
+2. Go to **Log in** (or the login route). Enter your **email address**.
+3. You receive a **one-time code** by email. Codes expire after a short time (see [Customization](#customization-and-configuration) for `OTP_TTL_MINUTES`).
+4. Enter the code on the verification screen. If your code expired, request a new one from the login flow.
 
-| Document | Focus |
-| -------- | ----- |
-| [Budget Buddy Build Plan](docs/Budget%20Buddy%20Build%20Plan.md) | Foundation through deployment: auth, ledger, joint accounts, imports and analytics, smart modes, and hosting hardening. |
-| [Budget Feature Phases](docs/Budget%20Feature%20Phases.md) | Advanced budgeting and account linking: schema and UI for budgets, “reality check” logic, real-time notifications, and joint accountability. |
+You stay signed in according to your browser session settings. Use **Log out** in the top bar when you finish on a shared device.
 
-**Build Plan (high level)**
+---
 
-1. Foundation and packages: environment, Tailwind and daisyUI, Livewire, OTP-style email auth, core migrations for accounts, categories, and transactions.
-2. Core ledger: account and category management, transactions with balance updates, multi-currency handling, dashboard.
-3. Buddy system: invitations, roles, collaborative UI, activity log.
-4. Data and analytics: bank CSV import patterns, budget and burn-rate style services, snapshots, charts.
-5. Smart modes, tax helpers, and production deployment notes (including cron and compliance-oriented checks).
+## Navigation and budgets
 
-**Budget feature phases (high level)**
+- **Top bar (desktop)**  
+  Links: **Dashboard**, **Accounts**, **Categories**, **Activity**, **Planner**, **History**, **Import**, **Tax**, **Settings**, and **Team** (only if you may invite members to the current budget).
 
-1. Data architecture: budgets linked to categories, accounts, and users; seed data for testing.
-2. Budget Planner UI: grid of categories, inline amounts, account linking, copy from previous month, priority markers.
-3. Logic layer: liquidity checks, spending velocity, funding gaps, zero-based style validation.
-4. Real-time notifications: broadcasting (for example Reverb or Pusher), notification UI, events for overages and liquidity.
-5. Joint workflows and automation: shared channels, month-end prompts, sinking-fund style automation, scheduled tasks for rates and queues.
+- **Small screens**  
+  Use the menu button to open the same links.
 
-The two documents sometimes suggest different ordering (for example, prioritizing notification infrastructure versus deeper analytics). Use them together and adjust sequencing to match release goals.
+- **Budget name and switcher**  
+  If you belong to **more than one** budget, the budget name opens a dropdown. Choose another budget to switch; the app reloads context for that workspace.
+
+- **Theme**  
+  The theme control toggles between light and dark styles (stored in the browser). It does not change your data.
+
+---
+
+## Training manual by screen
+
+### Dashboard
+
+- **Month totals**  
+  Income, expenses, and net for the current calendar month use transactions on accounts you can access in the active budget.
+
+- **Privacy blur**  
+  Enable blur to hide amounts on the dashboard when someone might read over your shoulder. The choice is remembered for your session.
+
+- **Rolling averages**  
+  Typical expense and income averages use recent months (see configuration for rolling windows). **Daily runway** divides available cash by days until **payday** (see Settings). If payday is not set, the app may use the end of the month for that calculation.
+
+- **Category breakdown**  
+  Shows how this month’s expenses split across categories.
+
+- **Trend chart**  
+  Visual history of income and expenses over several months (span is configurable).
+
+- **Recent transactions**  
+  Latest entries; use this to spot-check what you recorded.
+
+- **Quick Add**  
+  Opens a short form: account, category, income or expense, amount, date, and optional note. **Smart mode** (under Settings) can require longer notes for large expenses or notes on every transaction.
+
+### Accounts
+
+- Add and edit **bank accounts** tied to the current budget.
+- Set **name**, **currency**, and **kind** (liquid vs credit).
+- For non-base currencies, set an **exchange rate** (base currency per one unit of account currency) or use **fetch rate** if your server is configured to retrieve rates.
+- Editing respects your permissions; viewers cannot change accounts they do not own unless policy allows.
+
+### Categories
+
+- Review **system** categories and add **custom** categories.
+- Categories drive reporting and imports; keep names clear so imports map correctly.
+
+### Planner
+
+- Pick **year** and **month** (including previous and next month controls).
+- Enter **projected income** for the month where your role allows editing.
+- For each **expense category**, set planned amounts, optional **link to a bank account**, and **priority** (needs, wants, savings) where available.
+- Use **copy from previous month** when your role allows it to duplicate last month’s plan as a starting point.
+- The page may show **liquidity or funding hints** (planned totals vs linked accounts) depending on your version; only users with an appropriate **budget role** can edit monthly plans.
+
+### History
+
+- **Snapshots** summarize past months (income, expense, net) in the budget base currency.
+- A **trend chart** uses stored snapshot history up to a configurable number of months.
+
+### Activity
+
+- A chronological **activity log** for the current budget (who did what).
+
+### Import
+
+- Choose the **bank account** the file belongs to (must be one you can access).
+- Upload a **CSV** or spreadsheet (size limits apply).
+- Select the **format** that matches your file:
+  - **Signed amount** (one column with positive and negative amounts),
+  - **Separate debit and credit** columns,
+  - **FNB**, **Capitec**, or **Standard Bank** layouts where implemented.
+- The importer creates transactions and updates balances. Rows that cannot be mapped (for example unknown categories) may be **skipped**; the result message tells you how many rows imported vs skipped.
+
+### Tax (tools)
+
+- A **South African–oriented** gross-to-net style calculator for **indicative** take-home pay. It is **not** professional tax advice; use official SARS guidance for real decisions.
+
+### Settings
+
+- **Payday (day of month, 1–31)**  
+  Used with dashboard **runway** and “days until payday.” Leave empty to fall back to month-end behaviour described in the UI.
+
+- **Smart mode**  
+  - **Standard** — everyday defaults.  
+  - **Survival** — large expenses need a short note (threshold is configurable on the server).  
+  - **Zero-based** — every transaction needs a note.  
+  - **Travel** — emphasises foreign currency and trip-style spending.
+
+- **Tax calculator** link — same as the Tax page.
+
+- **Delete account and data**  
+  Permanently removes your user and budgets where you are the **only** member. You **cannot** delete while you still share a budget with someone else; resolve sharing first.
+
+### Team
+
+- Visible when you may **invite** others to the current budget.
+- Enter an **email** and select which **accounts** the invitee may use. They join as a **viewer** on those accounts only.
+- Pending invitations can be **cancelled** before they accept.
+- Invitations **expire** after a number of days (server-configurable). The invitee opens the link from email to accept.
+
+---
+
+## How-tos
+
+### Record a transaction quickly
+
+1. Open **Dashboard**.  
+2. Open **Quick Add**.  
+3. Choose account, category, income or expense, amount, and date.  
+4. Add a description or note if required by your smart mode.  
+5. Save.
+
+### Change the active budget
+
+1. Use the **budget dropdown** next to the logo (only if you have multiple budgets).  
+2. Select the other budget.  
+3. All screens then use that budget’s accounts and data.
+
+### Invite someone to shared accounts
+
+1. Open **Team** (you must be allowed to invite).  
+2. Enter their email and tick the accounts they should see.  
+3. Send the invitation.  
+4. They accept via the email link before it expires.
+
+### Import a bank export
+
+1. Export a file from your bank in a format this app supports (see **Import** formats).  
+2. Open **Import**, pick the account, upload the file, choose the matching format.  
+3. Read the success message for imported vs skipped rows.  
+4. Fix categories or file layout if many rows were skipped.
+
+### Switch light and dark theme
+
+Use the **theme** control in the navigation bar. Your choice is remembered in the browser.
+
+### Adjust runway and payday behaviour
+
+Set **Payday** under **Settings**. Clear it to use the default described on that page.
+
+---
+
+## Customization and configuration
+
+Operators set these in the environment (`.env`) and, where needed, `config/budgetbuddy.php`. Defaults are safe for local development; production values should be chosen deliberately.
+
+| Variable / topic | Purpose |
+| ---------------- | ------- |
+| `APP_NAME`, `APP_URL` | Application name and public URL (emails and links). |
+| `BUDGET_BASE_CURRENCY` | Default base currency for new budgets (often `ZAR`). |
+| `OTP_TTL_MINUTES` | How long login codes remain valid. |
+| `BUDGET_INVITATION_TTL_DAYS` | How long team invitations stay valid. |
+| `BUDGET_DASHBOARD_CHART_MONTHS` | Months shown on dashboard trend (3–24). |
+| `BUDGET_SNAPSHOT_TREND_MONTHS` | Months of snapshot history on History (3–36). |
+| `BUDGET_SURVIVAL_EXPENSE_NOTE_THRESHOLD` | In Survival mode, expenses above this amount (in account currency) need a longer note. |
+| Database and `mail` | Required for login codes and invitations. Use real SMTP in production (e.g. cPanel). See Laravel’s `config/mail.php`. |
+| `SESSION_*`, `QUEUE_*`, `CACHE_*` | Use `database` or `redis` as appropriate for production. |
+
+**Branding.** The app references `public/images/budget-buddy-logo.png` for the favicon and navbar. Replace those assets with your own if you rebrand (keep filenames or update views).
+
+**Rolling averages.** Short and long windows for averages are defined in `config/budgetbuddy.php` under `rolling_average_months` (defaults 3 and 6 months).
+
+---
+
+## Troubleshooting
+
+| Problem | What to check |
+| ------- | ------------- |
+| No email with login code | Mail settings (`MAIL_*`), spam folder, that the server can send mail (queue worker if mail is queued). |
+| Code expired | Request a new code; increase `OTP_TTL_MINUTES` only if policy allows. |
+| Import reports many skipped rows | Wrong **format** for your bank file; missing category mapping; file not CSV/XLS/XLSX within size limits. |
+| Exchange rate fetch failed | External API or network; enter a **manual rate** on the account. |
+| Wrong totals or currency | Confirm each account’s **currency** and **rate** to base; transactions belong to the intended **budget**. |
+| Cannot delete my account | You still **share** a budget with someone; leave or transfer ownership per your process, then retry. |
+| Team invite link invalid | Invitation **expired**; send a new invite (`BUDGET_INVITATION_TTL_DAYS`). |
+| Blank styles or missing scripts | After deploy, run `npm ci` and `npm run build`, or run the Vite dev server during development. |
+| 419 / session expired | Refresh the page, log in again; ensure `APP_URL` matches how users open the site and cookies work. |
+| Theme resets oddly | Clear site data for the domain; theme uses browser storage. |
+
+For **server errors**, check `storage/logs/laravel.log` (and your HTTP server or PHP logs). For database issues, confirm migrations ran: `php artisan migrate`.
+
+---
+
+## Developers and self-hosting
+
+**Stack:** PHP 8.2+, Laravel 12, Livewire 4, Vite, Tailwind CSS v4, daisyUI 5, Pest. See `composer.json` and `package.json` for packages.
+
+**Setup:**
+
+1. Copy `.env.example` to `.env` and set `APP_KEY`, database, and mail.  
+2. `composer install`  
+3. `php artisan key:generate`  
+4. `php artisan migrate`  
+5. `npm install` then `npm run build` (or `npm run dev` while developing)
+
+**Tests:** `php artisan test --compact`  
+**PHP formatting:** `vendor/bin/pint --dirty`
+
+**Documentation:** Laravel [https://laravel.com/docs](https://laravel.com/docs), Livewire [https://livewire.laravel.com/docs](https://livewire.laravel.com/docs).
 
 ---
 
 ## Security
 
-If you discover a security issue in **this application’s code**, report it to the maintainers of this repository using the contact method they prefer (for example an issue template or private security advisory).
+If you discover a security issue in **this application’s code**, report it to the maintainers of this repository using their preferred channel (for example a security advisory or private email).
 
-Vulnerabilities in upstream frameworks (Laravel, Livewire, and so on) should follow each project’s own disclosure process.
+Framework vulnerabilities should follow **Laravel** and **Livewire** disclosure processes.
 
 ---
 
 ## License
 
-Application code in this repository is released under the [MIT License](LICENSE).
-
-The Laravel framework and other third-party packages remain under their respective licenses.
+Application code in this repository is released under the [MIT License](LICENSE). Third-party packages remain under their respective licenses.

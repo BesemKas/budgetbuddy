@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\BankAccountKind;
 use App\Enums\BudgetPriority;
 use App\Enums\LedgerEntryType;
 use App\Models\Budget;
@@ -7,6 +8,7 @@ use App\Models\BudgetMonthSummary;
 use App\Models\Category;
 use App\Models\CategoryMonthBudget;
 use App\Services\BudgetMonthCopyService;
+use App\Services\BudgetRealityCheckService;
 use App\Services\CurrentBudget;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -267,6 +269,42 @@ new #[Layout('layouts.app')] class extends Component
         return Carbon::createFromDate($this->year, $this->month, 1)->translatedFormat('F Y');
     }
 
+    /**
+     * @return array{total_liquid_base: string, total_budgeted: string, is_funded: bool, shortfall_base: string}
+     */
+    public function liquidityAssessment(): array
+    {
+        return app(BudgetRealityCheckService::class)->liquidityAssessment(
+            app(CurrentBudget::class)->current(),
+            $this->year,
+            $this->month
+        );
+    }
+
+    /**
+     * @return array{projected_income: string, total_assigned: string, is_within_income: bool, overage_base: string}
+     */
+    public function zeroBasedAssessment(): array
+    {
+        return app(BudgetRealityCheckService::class)->zeroBasedAssessment(
+            app(CurrentBudget::class)->current(),
+            $this->year,
+            $this->month
+        );
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function creditLinkedCategoryIds(): array
+    {
+        return app(BudgetRealityCheckService::class)->categoryIdsLinkedToCreditAccounts(
+            app(CurrentBudget::class)->current(),
+            $this->year,
+            $this->month
+        );
+    }
+
     private function authorizeEdit(CurrentBudget $currentBudget): void
     {
         $budget = $currentBudget->current();
@@ -345,6 +383,33 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </div>
 
+    @php
+        $liq = $this->liquidityAssessment();
+        $zb = $this->zeroBasedAssessment();
+    @endphp
+
+    @if (! $liq['is_funded'])
+        <div role="alert" class="alert alert-warning mt-4 shadow-sm">
+            <span>
+                {{ __('Liquid cash (:currency) is below what you have budgeted. Shortfall: :amount.', [
+                    'currency' => $budgetBaseCurrency,
+                    'amount' => number_format((float) $liq['shortfall_base'], 2),
+                ]) }}
+            </span>
+        </div>
+    @endif
+
+    @if (! $zb['is_within_income'])
+        <div role="alert" class="alert alert-info mt-4 shadow-sm">
+            <span>
+                {{ __('Assigned categories exceed projected income by :amount :currency (zero-based check).', [
+                    'amount' => number_format((float) $zb['overage_base'], 2),
+                    'currency' => $budgetBaseCurrency,
+                ]) }}
+            </span>
+        </div>
+    @endif
+
     <div class="card bg-base-100 mt-4 border border-base-300/60 shadow-sm">
         <div class="card-body p-0">
             <div class="overflow-x-auto overscroll-x-contain">
@@ -360,7 +425,14 @@ new #[Layout('layouts.app')] class extends Component
                     <tbody>
                         @forelse ($this->categories as $category)
                             <tr wire:key="budget-line-{{ $category->id }}">
-                                <td class="font-medium">{{ $category->name }}</td>
+                                <td>
+                                    <div class="font-medium">{{ $category->name }}</div>
+                                    @if (in_array($category->id, $this->creditLinkedCategoryIds(), true))
+                                        <p class="text-warning mt-1 text-xs">
+                                            {{ __('Linked to a credit account — not counted as liquid cash for funding checks.') }}
+                                        </p>
+                                    @endif
+                                </td>
                                 <td class="text-end">
                                     <input
                                         type="text"
@@ -383,7 +455,9 @@ new #[Layout('layouts.app')] class extends Component
                                     >
                                         <option value="">{{ __('— None —') }}</option>
                                         @foreach ($this->bankAccounts as $account)
-                                            <option value="{{ $account->id }}">{{ $account->name }}</option>
+                                            <option value="{{ $account->id }}">
+                                                {{ $account->name }}@if ($account->kind === BankAccountKind::Credit) — {{ __('Credit') }}@endif
+                                            </option>
                                         @endforeach
                                     </select>
                                 </td>

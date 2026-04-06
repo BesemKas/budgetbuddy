@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BankAccountKind;
 use App\Enums\LedgerEntryType;
 use Database\Factories\BankAccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,6 +22,7 @@ class BankAccount extends Model
         'user_id',
         'budget_id',
         'name',
+        'kind',
         'currency_code',
         'balance',
         'exchange_rate',
@@ -32,6 +34,7 @@ class BankAccount extends Model
     protected function casts(): array
     {
         return [
+            'kind' => BankAccountKind::class,
             'balance' => 'decimal:4',
             'exchange_rate' => 'decimal:8',
         ];

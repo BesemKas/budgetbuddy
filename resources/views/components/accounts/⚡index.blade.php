@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\BankAccountKind;
 use App\Models\BankAccount;
 use App\Services\BudgetAccountAccess;
 use App\Services\CurrentBudget;
 use App\Services\ExchangeRateService;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -20,6 +22,8 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $exchange_rate = '';
 
+    public string $kind = 'liquid';
+
     public function openCreate(CurrentBudget $currentBudget): void
     {
         $this->authorize('create', BankAccount::class);
@@ -28,6 +32,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->name = '';
         $this->currency_code = $currentBudget->current()->base_currency;
         $this->exchange_rate = '';
+        $this->kind = BankAccountKind::Liquid->value;
         $this->showModal = true;
     }
 
@@ -41,6 +46,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->name = $account->name;
         $this->currency_code = $account->currency_code;
         $this->exchange_rate = $account->exchange_rate !== null ? (string) $account->exchange_rate : '';
+        $this->kind = $account->kind->value;
         $this->showModal = true;
     }
 
@@ -81,6 +87,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         $this->validate([
             'name' => ['required', 'string', 'max:120'],
+            'kind' => ['required', 'string', Rule::enum(BankAccountKind::class)],
             'currency_code' => ['required', 'string', 'size:3'],
             'exchange_rate' => ['nullable', 'numeric', 'min:0.00000001'],
         ]);
@@ -106,6 +113,7 @@ new #[Layout('layouts.app')] class extends Component
                 'user_id' => $user->id,
                 'budget_id' => $budget->id,
                 'name' => $this->name,
+                'kind' => BankAccountKind::from($this->kind),
                 'currency_code' => $code,
                 'balance' => '0',
                 'exchange_rate' => $rate !== null ? number_format((float) $rate, 8, '.', '') : null,
@@ -115,6 +123,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->authorize('update', $account);
             $account->update([
                 'name' => $this->name,
+                'kind' => BankAccountKind::from($this->kind),
                 'currency_code' => $code,
                 'exchange_rate' => $rate !== null ? number_format((float) $rate, 8, '.', '') : null,
             ]);
@@ -168,6 +177,7 @@ new #[Layout('layouts.app')] class extends Component
                     <thead>
                         <tr>
                             <th>{{ __('Name') }}</th>
+                            <th>{{ __('Type') }}</th>
                             <th>{{ __('Currency') }}</th>
                             <th class="text-end">{{ __('Rate to base') }}</th>
                             <th class="text-end">{{ __('Balance') }}</th>
@@ -178,6 +188,13 @@ new #[Layout('layouts.app')] class extends Component
                         @forelse ($this->accounts as $account)
                             <tr wire:key="acc-{{ $account->id }}">
                                 <td class="font-medium">{{ $account->name }}</td>
+                                <td>
+                                    @if ($account->kind === \App\Enums\BankAccountKind::Credit)
+                                        <span class="badge badge-warning badge-sm">{{ __('Credit') }}</span>
+                                    @else
+                                        <span class="badge badge-ghost badge-sm">{{ __('Liquid') }}</span>
+                                    @endif
+                                </td>
                                 <td><span class="badge badge-ghost badge-sm">{{ $account->currency_code }}</span></td>
                                 <td class="text-end font-mono text-sm">
                                     @if (strtoupper($account->currency_code) === strtoupper($this->budgetBaseCurrency))
@@ -207,7 +224,7 @@ new #[Layout('layouts.app')] class extends Component
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-base-content/60">{{ __('No accounts yet.') }}</td>
+                                <td colspan="6" class="text-base-content/60">{{ __('No accounts yet.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -224,6 +241,17 @@ new #[Layout('layouts.app')] class extends Component
                     <span class="label-text">{{ __('Name') }}</span>
                     <input type="text" class="input input-bordered w-full" wire:model="name" />
                     @error('name')
+                        <span class="label-text-alt text-error">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <label class="form-control w-full">
+                    <span class="label-text">{{ __('Account type') }}</span>
+                    <select class="select select-bordered w-full" wire:model="kind">
+                        <option value="{{ BankAccountKind::Liquid->value }}">{{ __('Liquid (cheque, savings, cash)') }}</option>
+                        <option value="{{ BankAccountKind::Credit->value }}">{{ __('Credit card (debt, not available cash)') }}</option>
+                    </select>
+                    @error('kind')
                         <span class="label-text-alt text-error">{{ $message }}</span>
                     @enderror
                 </label>
