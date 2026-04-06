@@ -7,7 +7,8 @@ it('includes the theme switcher on the login page', function (): void {
     $this->get(route('login'))
         ->assertSuccessful()
         ->assertSee('bb-theme-controller', escape: false)
-        ->assertSee('theme-controller', escape: false);
+        ->assertSee('theme-controller', escape: false)
+        ->assertSee('budget-buddy-logo.png', escape: false);
 });
 
 it('includes the theme switcher on the dashboard', function (): void {
@@ -18,5 +19,6 @@ it('includes the theme switcher on the dashboard', function (): void {
         ->get(route('dashboard'))
         ->assertSuccessful()
         ->assertSee('bb-theme-controller', escape: false)
-        ->assertSee('theme-controller', escape: false);
+        ->assertSee('theme-controller', escape: false)
+        ->assertSee('budget-buddy-logo.png', escape: false);
 });

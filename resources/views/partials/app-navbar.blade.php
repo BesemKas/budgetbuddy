@@ -11,8 +11,16 @@
 @endphp
 <div class="navbar sticky top-0 z-40 min-h-14 flex-wrap gap-y-2 border-b border-base-300/40 bg-base-100/95 px-2 shadow-sm backdrop-blur-sm sm:px-4">
     <div class="navbar-start flex min-w-0 flex-1 flex-col items-stretch gap-1 sm:max-w-none sm:flex-row sm:items-center sm:gap-2">
-        <a class="btn btn-ghost h-auto min-h-11 max-w-full shrink truncate px-2 text-base font-semibold tracking-tight sm:text-lg" href="{{ route('dashboard') }}">
-            {{ config('app.name') }}
+        <a class="btn btn-ghost h-auto min-h-11 max-w-full shrink gap-2 px-2 text-base font-semibold tracking-tight sm:text-lg" href="{{ route('dashboard') }}">
+            <img
+                src="{{ asset('images/budget-buddy-logo.png') }}"
+                alt="{{ config('app.name') }}"
+                class="h-9 w-auto max-w-[min(100%,11rem)] object-contain object-left sm:h-10 sm:max-w-[13rem]"
+                width="208"
+                height="80"
+                loading="eager"
+                decoding="async"
+            />
         </a>
         @auth
             @if ($navUser->budgets()->count() > 1)
