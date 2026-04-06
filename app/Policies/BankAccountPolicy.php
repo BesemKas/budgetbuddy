@@ -6,6 +6,7 @@ use App\Enums\BudgetRole;
 use App\Models\BankAccount;
 use App\Models\Budget;
 use App\Models\User;
+use App\Services\BudgetAccountAccess;
 use App\Services\CurrentBudget;
 
 class BankAccountPolicy
@@ -21,7 +22,11 @@ class BankAccountPolicy
             return false;
         }
 
-        return $user->budgets()->where('budgets.id', $bankAccount->budget_id)->exists();
+        if (! $user->budgets()->where('budgets.id', $bankAccount->budget_id)->exists()) {
+            return false;
+        }
+
+        return app(BudgetAccountAccess::class)->userCanAccessBankAccount($user, $bankAccount);
     }
 
     public function create(User $user): bool

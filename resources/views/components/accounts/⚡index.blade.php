@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\BankAccount;
+use App\Services\BudgetAccountAccess;
 use App\Services\CurrentBudget;
 use App\Services\ExchangeRateService;
 use Livewire\Attributes\Layout;
@@ -132,8 +133,12 @@ new #[Layout('layouts.app')] class extends Component
 
     public function getAccountsProperty(): \Illuminate\Database\Eloquent\Collection
     {
+        $budget = app(CurrentBudget::class)->current();
+        $ids = app(BudgetAccountAccess::class)->accessibleBankAccountIds(auth()->user(), $budget);
+
         return BankAccount::query()
-            ->where('budget_id', app(CurrentBudget::class)->current()->id)
+            ->where('budget_id', $budget->id)
+            ->whereIn('id', $ids)
             ->latest('id')
             ->get();
     }

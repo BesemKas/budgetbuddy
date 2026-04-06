@@ -49,6 +49,18 @@
                     {{ __('Categories') }}
                 </a>
             </li>
+            <li>
+                <a href="{{ route('budget.activity') }}" class="{{ request()->routeIs('budget.activity') ? 'menu-active' : '' }}" wire:navigate>
+                    {{ __('Activity') }}
+                </a>
+            </li>
+            @can('invite', $currentBudget)
+                <li>
+                    <a href="{{ route('budget.team') }}" class="{{ request()->routeIs('budget.team') ? 'menu-active' : '' }}" wire:navigate>
+                        {{ __('Team') }}
+                    </a>
+                </li>
+            @endcan
         </ul>
     </div>
     <div class="navbar-end gap-2">
@@ -60,6 +72,10 @@
                 <li><a href="{{ route('dashboard') }}" wire:navigate>{{ __('Dashboard') }}</a></li>
                 <li><a href="{{ route('accounts.index') }}" wire:navigate>{{ __('Accounts') }}</a></li>
                 <li><a href="{{ route('categories.index') }}" wire:navigate>{{ __('Categories') }}</a></li>
+                <li><a href="{{ route('budget.activity') }}" wire:navigate>{{ __('Activity') }}</a></li>
+                @can('invite', $currentBudget)
+                    <li><a href="{{ route('budget.team') }}" wire:navigate>{{ __('Team') }}</a></li>
+                @endcan
             </ul>
         </div>
         <form method="POST" action="{{ route('logout') }}" class="inline">

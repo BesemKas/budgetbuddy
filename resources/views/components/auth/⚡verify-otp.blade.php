@@ -74,8 +74,20 @@ new #[Layout('layouts.app')] class extends Component
 
         app(CurrentBudget::class)->bootstrapSessionIfNeeded($user);
 
+        $inviteToken = session('budget_invitation_token');
+
         Session::forget('otp_email');
         Session::regenerate();
+
+        if ($inviteToken !== null) {
+            session(['budget_invitation_token' => $inviteToken]);
+        }
+
+        if ($inviteToken !== null) {
+            $this->redirectRoute('budget-invitations.accept', ['token' => $inviteToken], navigate: true);
+
+            return;
+        }
 
         $this->redirectRoute('dashboard', navigate: true);
     }

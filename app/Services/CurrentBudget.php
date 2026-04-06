@@ -55,6 +55,13 @@ class CurrentBudget
         }
 
         $this->putSessionBudgetId((int) $budget->id);
+
+        if ($this->request->hasSession()) {
+            activity()
+                ->performedOn($budget)
+                ->causedBy($user)
+                ->log('budget_switched');
+        }
     }
 
     public function ensurePersonalBudgetExists(User $user): void

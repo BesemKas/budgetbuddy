@@ -11,6 +11,13 @@ new #[Layout('layouts.app')] class extends Component
     #[Validate(['required', 'email:rfc'])]
     public string $email = '';
 
+    public function mount(): void
+    {
+        if ($this->email === '' && session()->has('budget_invitation_email')) {
+            $this->email = (string) session('budget_invitation_email');
+        }
+    }
+
     public function send(OtpService $otpService): void
     {
         $this->validate();
@@ -43,6 +50,9 @@ new #[Layout('layouts.app')] class extends Component
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
         <div class="card-body gap-4">
             <h1 class="card-title text-2xl">{{ __('Sign in to Budget Buddy') }}</h1>
+            @if (session('invitation_notice'))
+                <div role="status" class="alert alert-info alert-soft text-sm">{{ session('invitation_notice') }}</div>
+            @endif
             <p class="text-base-content/70 text-sm">
                 {{ __('We will email you a one-time code. No password required.') }}
             </p>

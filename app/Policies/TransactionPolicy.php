@@ -3,9 +3,12 @@
 namespace App\Policies;
 
 use App\Enums\BudgetRole;
+use App\Models\BankAccount;
 use App\Models\Budget;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\BudgetAccountAccess;
+use App\Services\CurrentBudget;
 
 class TransactionPolicy
 {
@@ -16,11 +19,17 @@ class TransactionPolicy
 
     public function view(User $user, Transaction $transaction): bool
     {
-        if ($transaction->budget_id === null) {
+        if ($transaction->budget_id === null || $transaction->bank_account_id === null) {
             return false;
         }
 
-        return $user->budgets()->where('budgets.id', $transaction->budget_id)->exists();
+        if (! $user->budgets()->where('budgets.id', $transaction->budget_id)->exists()) {
+            return false;
+        }
+
+        $account = BankAccount::query()->find($transaction->bank_account_id);
+
+        return $account !== null && app(BudgetAccountAccess::class)->userCanAccessBankAccount($user, $account);
     }
 
     public function create(User $user): bool

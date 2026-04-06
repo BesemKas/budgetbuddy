@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class BudgetInvitation extends Model
 {
@@ -44,6 +45,15 @@ class BudgetInvitation extends Model
     public function invitedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
+
+    /**
+     * @return BelongsToMany<BankAccount, $this>
+     */
+    public function bankAccounts(): BelongsToMany
+    {
+        return $this->belongsToMany(BankAccount::class, 'budget_invitation_bank_account', 'budget_invitation_id', 'bank_account_id')
+            ->withTimestamps();
     }
 
     public function isExpired(): bool

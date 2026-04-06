@@ -39,19 +39,32 @@ class LedgerCurrencyService
     }
 
     /**
+     * @param  list<int>|null  $limitToBankAccountIds  If set, only these accounts (e.g. viewer’s shared accounts). Empty list yields zero totals.
      * @return array{income: string, expense: string, net: string}
      */
-    public function periodTotalsInBase(Budget $budget, Carbon $start, Carbon $end): array
+    public function periodTotalsInBase(Budget $budget, Carbon $start, Carbon $end, ?array $limitToBankAccountIds = null): array
     {
-        $row = Transaction::query()
+        if (is_array($limitToBankAccountIds) && $limitToBankAccountIds === []) {
+            return [
+                'income' => '0',
+                'expense' => '0',
+                'net' => '0',
+            ];
+        }
+
+        $query = Transaction::query()
             ->where('budget_id', $budget->id)
-            ->whereBetween('occurred_on', [$start->toDateString(), $end->toDateString()])
-            ->selectRaw(
-                'COALESCE(SUM(CASE WHEN type = ? THEN amount * COALESCE(exchange_rate, 1) ELSE 0 END), 0) as income,
-                 COALESCE(SUM(CASE WHEN type = ? THEN amount * COALESCE(exchange_rate, 1) ELSE 0 END), 0) as expense',
-                [LedgerEntryType::Income->value, LedgerEntryType::Expense->value]
-            )
-            ->first();
+            ->whereBetween('occurred_on', [$start->toDateString(), $end->toDateString()]);
+
+        if (is_array($limitToBankAccountIds)) {
+            $query->whereIn('bank_account_id', $limitToBankAccountIds);
+        }
+
+        $row = $query->selectRaw(
+            'COALESCE(SUM(CASE WHEN type = ? THEN amount * COALESCE(exchange_rate, 1) ELSE 0 END), 0) as income,
+             COALESCE(SUM(CASE WHEN type = ? THEN amount * COALESCE(exchange_rate, 1) ELSE 0 END), 0) as expense',
+            [LedgerEntryType::Income->value, LedgerEntryType::Expense->value]
+        )->first();
 
         $income = $this->normalizeDecimalString($row->income ?? '0');
         $expense = $this->normalizeDecimalString($row->expense ?? '0');
@@ -65,14 +78,16 @@ class LedgerCurrencyService
     }
 
     /**
+     * @param  list<int>|null  $limitToBankAccountIds
      * @return array{income: string, expense: string, net: string}
      */
-    public function currentMonthTotals(Budget $budget): array
+    public function currentMonthTotals(Budget $budget, ?array $limitToBankAccountIds = null): array
     {
         return $this->periodTotalsInBase(
             $budget,
             Carbon::now()->startOfMonth(),
-            Carbon::now()->endOfMonth()
+            Carbon::now()->endOfMonth(),
+            $limitToBankAccountIds
         );
     }
 

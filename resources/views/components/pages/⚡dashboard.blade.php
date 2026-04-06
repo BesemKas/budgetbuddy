@@ -4,6 +4,7 @@ use App\Enums\LedgerEntryType;
 use App\Models\BankAccount;
 use App\Models\Category;
 use App\Models\Transaction;
+use App\Services\BudgetAccountAccess;
 use App\Services\CurrentBudget;
 use App\Services\LedgerCurrencyService;
 use Illuminate\Support\Collection;
@@ -51,10 +52,12 @@ new #[Layout('layouts.app')] class extends Component
     {
         $user = auth()->user();
         $budget = $currentBudget->current();
+        $accessibleAccountIds = app(BudgetAccountAccess::class)->accessibleBankAccountIds($user, $budget);
         $this->budgetBaseCurrency = $budget->base_currency;
-        $this->monthTotals = $ledger->currentMonthTotals($budget);
+        $this->monthTotals = $ledger->currentMonthTotals($budget, $accessibleAccountIds);
         $this->recentTransactions = Transaction::query()
             ->where('budget_id', $budget->id)
+            ->whereIn('bank_account_id', $accessibleAccountIds)
             ->with(['bankAccount', 'category', 'user'])
             ->latest('occurred_on')
             ->latest('id')
@@ -63,6 +66,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->bankAccounts = BankAccount::query()
             ->where('budget_id', $budget->id)
+            ->whereIn('id', $accessibleAccountIds)
             ->orderBy('name')
             ->get();
     }
@@ -80,8 +84,10 @@ new #[Layout('layouts.app')] class extends Component
         $this->quick_description = '';
         $this->quick_category_id = null;
         $budget = $currentBudget->current();
+        $accessibleAccountIds = app(BudgetAccountAccess::class)->accessibleBankAccountIds(auth()->user(), $budget);
         $this->bankAccounts = BankAccount::query()
             ->where('budget_id', $budget->id)
+            ->whereIn('id', $accessibleAccountIds)
             ->orderBy('name')
             ->get();
         $this->showQuickAdd = true;
@@ -158,6 +164,9 @@ new #[Layout('layouts.app')] class extends Component
 ?>
 
 <div class="mx-auto max-w-5xl px-4 py-6">
+    @if (session('status'))
+        <div role="status" class="alert alert-success alert-soft mb-4 text-sm">{{ session('status') }}</div>
+    @endif
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="text-2xl font-semibold tracking-tight">{{ __('Dashboard') }}</h1>

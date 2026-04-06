@@ -7,11 +7,13 @@ use Database\Factories\TransactionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Transaction extends Model
 {
     /** @use HasFactory<TransactionFactory> */
-    use HasFactory;
+    use HasFactory, LogsActivity;
 
     /**
      * @var list<string>
@@ -72,5 +74,25 @@ class Transaction extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('ledger')
+            ->logOnly([
+                'amount',
+                'type',
+                'currency_code',
+                'exchange_rate',
+                'occurred_on',
+                'description',
+                'budget_id',
+                'bank_account_id',
+                'category_id',
+                'user_id',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }

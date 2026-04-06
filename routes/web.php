@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 
+Route::livewire('/invitations/{token}', 'pages.invitations-accept')->name('budget-invitations.accept');
+
 Route::middleware('guest')->group(function (): void {
     Route::livewire('/login', 'auth.request-otp')->name('login');
     Route::livewire('/login/verify', 'auth.verify-otp')->name('login.verify');
@@ -25,6 +27,8 @@ Route::middleware(['auth', 'budget'])->group(function (): void {
     Route::livewire('/dashboard', 'pages.dashboard')->name('dashboard');
     Route::livewire('/accounts', 'accounts.index')->name('accounts.index');
     Route::livewire('/categories', 'categories.index')->name('categories.index');
+    Route::livewire('/budget/team', 'pages.budget-team')->name('budget.team');
+    Route::livewire('/budget/activity', 'pages.budget-activity')->name('budget.activity');
 });
 
 Route::post('/logout', function () {
