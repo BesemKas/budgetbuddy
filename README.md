@@ -1,59 +1,106 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Budget Buddy
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Budget Buddy is a web application for personal and household money management: accounts, categories, transactions, and shared access with a partner. The long-term direction is to move from simple tracking toward proactive budgeting, liquidity checks, and timely feedback when plans and spending diverge.
 
-## About Laravel
+This repository is licensed under the MIT License; see the [LICENSE](LICENSE) file.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## For users
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+**What you can use it for**
 
-## Learning Laravel
+- Track bank accounts (including multiple currencies) and keep balances in step with your transactions.
+- Organize spending with categories (defaults plus your own).
+- Record income and expenses quickly and see summaries on the dashboard.
+- Work with someone else on the same budget using invitations and roles (for example, owner versus viewer), with an activity history for shared spaces.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+**Privacy and comfort**
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- The app supports a privacy-oriented view on the dashboard (for example, blurring sensitive figures) so you can use it in shared spaces more comfortably.
 
-## Laravel Sponsors
+**Where the product is headed**
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Detailed plans describe richer budgeting (monthly targets per category, linking budgets to accounts, copy-from-previous-month), checks that compare your plan to real balances and spending pace, optional real-time alerts when limits or liquidity are at risk, and more automation around month-end and joint use. Those ideas are spelled out in the documents linked under [Roadmap and planning documents](#roadmap-and-planning-documents) below.
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## For developers
 
-## Contributing
+**Stack (this repo)**
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- PHP 8.2+, Laravel 12
+- Livewire 4, Vite, Tailwind CSS v4, daisyUI 5
+- Pest for tests; Laravel Pint for code style
+- Packages in use include Spatie Permission, Spatie Activity Log, Maatwebsite Excel, and Blade Lucide icons (see `composer.json` and `package.json`).
 
-## Code of Conduct
+**Prerequisites**
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- PHP 8.2+, Composer, Node.js and npm, and a database supported by Laravel (for example MySQL).
 
-## Security Vulnerabilities
+**Getting started**
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. Clone the repository and copy `.env.example` to `.env`.
+2. Run `composer install` and `php artisan key:generate`.
+3. Configure your database and mail settings in `.env` (the project was designed with MySQL and SMTP-friendly hosting in mind).
+4. Run migrations: `php artisan migrate`.
+5. Install frontend dependencies and build assets: `npm install`, then `npm run build` (or `npm run dev` while developing).
+
+**Tests**
+
+- Run the test suite with: `php artisan test --compact`
+- Prefer targeted runs while iterating, for example: `php artisan test --compact --filter=YourTestName`
+
+**Formatting**
+
+- Format changed PHP code with Pint: `vendor/bin/pint --dirty`
+
+**Further reading**
+
+- Laravel: [https://laravel.com/docs](https://laravel.com/docs)
+- Livewire: [https://livewire.laravel.com/docs](https://livewire.laravel.com/docs)
+
+---
+
+## Roadmap and planning documents
+
+Implementation is described in two complementary tracks:
+
+| Document | Focus |
+| -------- | ----- |
+| [Budget Buddy Build Plan](docs/Budget%20Buddy%20Build%20Plan.md) | Foundation through deployment: auth, ledger, joint accounts, imports and analytics, smart modes, and hosting hardening. |
+| [Budget Feature Phases](docs/Budget%20Feature%20Phases.md) | Advanced budgeting and account linking: schema and UI for budgets, “reality check” logic, real-time notifications, and joint accountability. |
+
+**Build Plan (high level)**
+
+1. Foundation and packages: environment, Tailwind and daisyUI, Livewire, OTP-style email auth, core migrations for accounts, categories, and transactions.
+2. Core ledger: account and category management, transactions with balance updates, multi-currency handling, dashboard.
+3. Buddy system: invitations, roles, collaborative UI, activity log.
+4. Data and analytics: bank CSV import patterns, budget and burn-rate style services, snapshots, charts.
+5. Smart modes, tax helpers, and production deployment notes (including cron and compliance-oriented checks).
+
+**Budget feature phases (high level)**
+
+1. Data architecture: budgets linked to categories, accounts, and users; seed data for testing.
+2. Budget Planner UI: grid of categories, inline amounts, account linking, copy from previous month, priority markers.
+3. Logic layer: liquidity checks, spending velocity, funding gaps, zero-based style validation.
+4. Real-time notifications: broadcasting (for example Reverb or Pusher), notification UI, events for overages and liquidity.
+5. Joint workflows and automation: shared channels, month-end prompts, sinking-fund style automation, scheduled tasks for rates and queues.
+
+The two documents sometimes suggest different ordering (for example, prioritizing notification infrastructure versus deeper analytics). Use them together and adjust sequencing to match release goals.
+
+---
+
+## Security
+
+If you discover a security issue in **this application’s code**, report it to the maintainers of this repository using the contact method they prefer (for example an issue template or private security advisory).
+
+Vulnerabilities in upstream frameworks (Laravel, Livewire, and so on) should follow each project’s own disclosure process.
+
+---
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Application code in this repository is released under the [MIT License](LICENSE).
+
+The Laravel framework and other third-party packages remain under their respective licenses.
