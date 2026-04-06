@@ -551,7 +551,7 @@ new #[Layout('layouts.app')] class extends Component
     </div>
 
     <div class="modal {{ $showQuickAdd ? 'modal-open' : '' }} p-4 sm:p-0" role="dialog" aria-modal="true">
-        <div class="bb-modal-box">
+        <div class="modal-box bb-modal-box">
             <h3 class="font-bold text-lg">{{ __('Quick add transaction') }}</h3>
             <form wire:submit="saveQuickTransaction" class="mt-4 flex flex-col gap-4">
                 <label class="form-control w-full">
