@@ -1,12 +1,58 @@
 <?php
 
+use App\Services\BudgetNotificationService;
+use App\Services\CurrentBudget;
 use Livewire\Component;
 
 new class extends Component
 {
+    public int $lastUnreadBaseline = 0;
+
+    public function mount(): void
+    {
+        $this->lastUnreadBaseline = $this->unreadCount;
+    }
+
+    private function currentBudgetId(): int
+    {
+        return app(CurrentBudget::class)->current()->id;
+    }
+
     public function getUnreadCountProperty(): int
     {
-        return auth()->user()->unreadNotifications()->count();
+        $bid = $this->currentBudgetId();
+
+        return auth()->user()->unreadNotifications()
+            ->where('data->budget_id', $bid)
+            ->count();
+    }
+
+    /**
+     * Poll for new unread notifications and toast when the count increases (in-app only; no WebSockets).
+     */
+    public function pollForNewNotifications(): void
+    {
+        $bid = $this->currentBudgetId();
+        $user = auth()->user();
+
+        $current = $user->unreadNotifications()
+            ->where('data->budget_id', $bid)
+            ->count();
+
+        if ($current > $this->lastUnreadBaseline) {
+            $latest = $user->unreadNotifications()
+                ->where('data->budget_id', $bid)
+                ->latest()
+                ->first();
+
+            $data = $latest?->data;
+            $title = is_array($data) ? ($data['title'] ?? null) : null;
+            $message = $title !== null && $title !== '' ? $title : __('New notification');
+
+            $this->js('window.budgetBuddyToast('.json_encode($message).', "info")');
+        }
+
+        $this->lastUnreadBaseline = $current;
     }
 
     /**
@@ -14,22 +60,30 @@ new class extends Component
      */
     public function getItemsProperty(): \Illuminate\Database\Eloquent\Collection
     {
-        return auth()->user()->notifications()->latest()->limit(20)->get();
+        $bid = $this->currentBudgetId();
+
+        return auth()->user()->notifications()
+            ->where('data->budget_id', $bid)
+            ->latest()
+            ->limit(20)
+            ->get();
     }
 
-    public function markAllRead(): void
+    public function dismissAllUnreadForCurrentBudget(BudgetNotificationService $notifications): void
     {
-        auth()->user()->unreadNotifications->markAsRead();
+        $notifications->markAllUnreadForBudgetAsRead(auth()->user(), $this->currentBudgetId());
+        $this->lastUnreadBaseline = $this->unreadCount;
     }
 
     public function markRead(string $id): void
     {
         auth()->user()->notifications()->where('id', $id)->first()?->markAsRead();
+        $this->lastUnreadBaseline = $this->unreadCount;
     }
 };
 ?>
 
-<div class="dropdown dropdown-end" wire:poll.30s>
+<div class="dropdown dropdown-end" wire:poll.12s="pollForNewNotifications">
     <button
         tabindex="0"
         type="button"
@@ -48,10 +102,10 @@ new class extends Component
         class="dropdown-content z-[60] mt-2 w-[min(100vw-1rem,22rem)] rounded-box border border-base-300/60 bg-base-100 p-0 shadow-lg"
     >
         <div class="flex items-center justify-between gap-2 border-b border-base-300/40 px-3 py-2">
-            <span class="text-sm font-semibold">{{ __('Notifications') }}</span>
+            <span class="text-sm font-semibold" title="{{ __('In-app only; the list refreshes every few seconds while you use the app.') }}">{{ __('Notifications') }}</span>
             @if ($this->unreadCount > 0)
-                <button type="button" class="link link-primary text-xs" wire:click="markAllRead">
-                    {{ __('Mark all read') }}
+                <button type="button" class="link link-primary shrink-0 text-xs" wire:click="dismissAllUnreadForCurrentBudget">
+                    {{ __('Dismiss all for this budget') }}
                 </button>
             @endif
         </div>

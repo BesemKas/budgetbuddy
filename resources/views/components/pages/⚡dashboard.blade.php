@@ -8,9 +8,12 @@ use App\Models\Category;
 use App\Models\Transaction;
 use App\Services\BudgetAccountAccess;
 use App\Services\BudgetAnalyticsService;
+use App\Services\BudgetRealityCheckService;
 use App\Services\CurrentBudget;
 use App\Services\LedgerCurrencyService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Carbon;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -60,6 +63,20 @@ new #[Layout('layouts.app')] class extends Component
     /** @var list<array{category_id: int, name: string, total: string, percent: float}> */
     public array $categoryExpenseBreakdown = [];
 
+    public string $monthPlannedSpend = '0';
+
+    public string $monthActualExpenseBase = '0';
+
+    public bool $showMonthSweepPrompt = false;
+
+    public string $previousMonthLabel = '';
+
+    public string $previousMonthIncome = '0';
+
+    public string $previousMonthExpense = '0';
+
+    public string $previousMonthNet = '0';
+
     public function mount(LedgerCurrencyService $ledger, CurrentBudget $currentBudget, BudgetAnalyticsService $analytics): void
     {
         $this->privacyBlur = session('dashboard_privacy_blur', false);
@@ -94,6 +111,21 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->categoryExpenseBreakdown = $analytics->currentMonthExpenseByCategory($budget, $accessibleAccountIds);
 
+        $y = (int) now()->year;
+        $m = (int) now()->month;
+        $reality = app(BudgetRealityCheckService::class);
+        $this->monthPlannedSpend = $reality->totalBudgetedForMonth($budget, $y, $m);
+        $this->monthActualExpenseBase = $reality->totalExpenseInBaseForMonth($budget, $y, $m);
+        $this->showMonthSweepPrompt = $this->shouldShowMonthSweepPrompt($user);
+
+        $prevStart = Carbon::now()->subMonth()->startOfMonth();
+        $prevEnd = $prevStart->copy()->endOfMonth();
+        $prevTotals = $ledger->periodTotalsInBase($budget, $prevStart, $prevEnd, $accessibleAccountIds);
+        $this->previousMonthLabel = $prevStart->translatedFormat('F Y');
+        $this->previousMonthIncome = $prevTotals['income'];
+        $this->previousMonthExpense = $prevTotals['expense'];
+        $this->previousMonthNet = $prevTotals['net'];
+
         $this->recentTransactions = Transaction::query()
             ->where('budget_id', $budget->id)
             ->whereIn('bank_account_id', $accessibleAccountIds)
@@ -113,6 +145,21 @@ new #[Layout('layouts.app')] class extends Component
     public function updatedPrivacyBlur(bool $value): void
     {
         session(['dashboard_privacy_blur' => $value]);
+    }
+
+    public function dismissMonthSweepPrompt(): void
+    {
+        auth()->user()->update(['sweep_prompt_dismissed_month' => now()->format('Y-m')]);
+        $this->showMonthSweepPrompt = false;
+    }
+
+    private function shouldShowMonthSweepPrompt(\App\Models\User $user): bool
+    {
+        if (now()->day > 7) {
+            return false;
+        }
+
+        return $user->sweep_prompt_dismissed_month !== now()->format('Y-m');
     }
 
     public function openQuickAdd(CurrentBudget $currentBudget): void
@@ -223,16 +270,66 @@ new #[Layout('layouts.app')] class extends Component
             ->where('expires_at', '>', now())
             ->exists();
     }
+
+    #[Computed]
+    public function smartMode(): SmartMode
+    {
+        return auth()->user()->smart_mode ?? SmartMode::Standard;
+    }
 };
 ?>
 
-<div class="bb-page max-w-5xl">
+<div class="bb-page max-w-5xl" wire:poll.60s="refreshData">
     @if (session('status'))
         <div role="status" class="alert alert-success alert-soft mb-4 text-sm">{{ session('status') }}</div>
     @endif
     @if ($this->hasPendingTeamInvitation)
         <div role="status" class="alert alert-info mb-4 text-sm">
             {{ __('You have a pending budget invitation. Open the link in the email we sent to :email to join the team. You can keep using your personal budget until you accept.', ['email' => auth()->user()->email]) }}
+        </div>
+    @endif
+    @if ($this->showMonthSweepPrompt)
+        <div class="card bg-base-100 border border-base-300/60 shadow-sm mb-4">
+            <div class="card-body gap-3 p-4 sm:p-5">
+                <h2 class="card-title text-base">{{ __('Month check-in') }}</h2>
+                <p class="text-base-content/80 text-sm">
+                    {{ __('Close out :month, then set this month’s plan. Shared budgets update here while everyone records (this page refreshes periodically).', ['month' => $previousMonthLabel]) }}
+                </p>
+                <div class="stats stats-vertical w-full shadow-sm sm:stats-horizontal">
+                    <div class="stat bg-base-200/40 rounded-box px-3 py-2">
+                        <div class="stat-title text-xs">{{ __('Last month income') }}</div>
+                        <div class="stat-value text-lg tabular-nums {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                            {{ number_format((float) $previousMonthIncome, 2) }}
+                        </div>
+                        <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
+                    </div>
+                    <div class="stat bg-base-200/40 rounded-box px-3 py-2">
+                        <div class="stat-title text-xs">{{ __('Last month expenses') }}</div>
+                        <div class="stat-value text-lg tabular-nums text-error {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                            {{ number_format((float) $previousMonthExpense, 2) }}
+                        </div>
+                        <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
+                    </div>
+                    <div class="stat bg-base-200/40 rounded-box px-3 py-2">
+                        <div class="stat-title text-xs">{{ __('Last month net') }}</div>
+                        <div @class([
+                            'stat-value text-lg tabular-nums',
+                            'text-success' => (float) $previousMonthNet >= 0,
+                            'text-warning' => (float) $previousMonthNet < 0,
+                            'blur-sm select-none' => $privacyBlur,
+                        ])>
+                            {{ number_format((float) $previousMonthNet, 2) }}
+                        </div>
+                        <div class="stat-desc">{{ $budgetBaseCurrency }}</div>
+                    </div>
+                </div>
+                <div class="card-actions flex-wrap justify-end gap-2">
+                    <a href="{{ route('budget.planner') }}" wire:navigate class="btn btn-primary btn-sm">{{ __('Open budget planner') }}</a>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="dismissMonthSweepPrompt">
+                        {{ __('Dismiss for this month') }}
+                    </button>
+                </div>
+            </div>
         </div>
     @endif
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -284,6 +381,29 @@ new #[Layout('layouts.app')] class extends Component
                 {{ number_format((float) $monthTotals['net'], 2) }}
             </div>
             <div class="stat-desc">{{ __('Income minus expenses (base currency)') }}</div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
+        <div class="card-body gap-3 p-4 sm:p-6">
+            <h2 class="card-title text-base sm:text-lg">{{ __('Plan vs actual (this month)') }}</h2>
+            <p class="text-base-content/60 text-xs">
+                {{ __('Sum of planned category amounts for this calendar month vs total expenses in :currency (base).', ['currency' => $budgetBaseCurrency]) }}
+            </p>
+            <dl class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-box border border-base-300/50 bg-base-200/30 p-3">
+                    <dt class="text-base-content/70 text-xs">{{ __('Planned (categories)') }}</dt>
+                    <dd @class(['font-mono text-lg tabular-nums', 'blur-sm select-none' => $privacyBlur])>
+                        {{ number_format((float) $monthPlannedSpend, 2) }} {{ $budgetBaseCurrency }}
+                    </dd>
+                </div>
+                <div class="rounded-box border border-base-300/50 bg-base-200/30 p-3">
+                    <dt class="text-base-content/70 text-xs">{{ __('Actual (expenses)') }}</dt>
+                    <dd @class(['font-mono text-lg tabular-nums text-error', 'blur-sm select-none' => $privacyBlur])>
+                        {{ number_format((float) $monthActualExpenseBase, 2) }} {{ $budgetBaseCurrency }}
+                    </dd>
+                </div>
+            </dl>
         </div>
     </div>
 
@@ -488,16 +608,16 @@ new #[Layout('layouts.app')] class extends Component
 
                 <label class="form-control w-full">
                     <span class="label-text">{{ __('Note') }}</span>
-                    @if ($smartMode === \App\Enums\SmartMode::ZeroBased)
+                    @if ($this->smartMode === \App\Enums\SmartMode::ZeroBased)
                         <span class="label-text-alt text-base-content/70">{{ __('Required — describe what this money is for.') }}</span>
-                    @elseif ($smartMode === \App\Enums\SmartMode::Survival)
+                    @elseif ($this->smartMode === \App\Enums\SmartMode::Survival)
                         <span class="label-text-alt text-base-content/70">{{ __('Large expenses need a short explanation in this mode.') }}</span>
                     @endif
                     <textarea
                         class="textarea textarea-bordered w-full"
                         wire:model="quick_description"
                         rows="2"
-                        placeholder="{{ $smartMode === \App\Enums\SmartMode::ZeroBased ? __('e.g. Groceries for the week') : __('Optional') }}"
+                        placeholder="{{ $this->smartMode === \App\Enums\SmartMode::ZeroBased ? __('e.g. Groceries for the week') : __('Optional') }}"
                     ></textarea>
                     @error('quick_description')
                         <span class="label-text-alt text-error">{{ $message }}</span>

@@ -100,6 +100,14 @@ class Budget extends Model
         return $this->hasMany(CategoryMonthBudget::class);
     }
 
+    /**
+     * @return HasMany<SinkingFundRule, $this>
+     */
+    public function sinkingFundRules(): HasMany
+    {
+        return $this->hasMany(SinkingFundRule::class);
+    }
+
     public function roleFor(User $user): ?BudgetRole
     {
         $pivot = $this->users()->where('users.id', $user->id)->first()?->pivot;

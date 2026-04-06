@@ -18,6 +18,8 @@ it('includes the theme switcher on the dashboard', function (): void {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertSuccessful()
+        ->assertSee('bb-app-sidebar', escape: false)
+        ->assertSee('bb-sidebar-toggle', escape: false)
         ->assertSee('bb-theme-controller', escape: false)
         ->assertSee('theme-controller', escape: false)
         ->assertSee('budget-buddy-logo.png', escape: false);

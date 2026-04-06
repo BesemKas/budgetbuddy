@@ -31,7 +31,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="bb-page max-w-4xl">
+<div class="bb-page max-w-4xl" wire:poll.45s>
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">{{ __('Activity') }}</h1>
         <p class="text-base-content/70 mt-1 text-sm">

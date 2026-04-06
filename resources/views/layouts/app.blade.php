@@ -1,6 +1,20 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    @auth
+        <script>
+            (function () {
+                try {
+                    var v = localStorage.getItem('budgetbuddy-sidebar-collapsed');
+                    if (v === '1') {
+                        document.documentElement.classList.add('bb-sidebar-collapsed');
+                    } else {
+                        document.documentElement.classList.remove('bb-sidebar-collapsed');
+                    }
+                } catch (e) {}
+            })();
+        </script>
+    @endauth
     <script>
         (function () {
             try {
@@ -8,13 +22,7 @@
                 var ls = localStorage.getItem(k);
                 var ss = sessionStorage.getItem(k);
                 var t = null;
-                if (
-                    (ls === 'dracula' || ls === 'cupcake') &&
-                    (ss === 'dracula' || ss === 'cupcake') &&
-                    ls !== ss
-                ) {
-                    t = ss;
-                } else if (ls === 'dracula' || ls === 'cupcake') {
+                if (ls === 'dracula' || ls === 'cupcake') {
                     t = ls;
                 } else if (ss === 'dracula' || ss === 'cupcake') {
                     t = ss;
@@ -43,14 +51,37 @@
         </div>
     @endguest
     @auth
-        @include('partials.app-navbar')
-        @include('partials.smart-mode-banner')
-    @endauth
-    @isset($slot)
-        {{ $slot }}
+        <div class="flex min-h-screen flex-col">
+            @persist('budgetbuddy-navbar')
+                @include('partials.app-navbar')
+            @endpersist
+            <div class="flex min-h-0 flex-1">
+                @persist('budgetbuddy-sidebar')
+                    @include('partials.app-sidebar')
+                @endpersist
+                <div id="bb-app-shell" class="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <div
+                        id="bb-toast-host"
+                        class="toast toast-end toast-top z-[100] w-auto max-w-[min(100vw-1rem,24rem)] gap-2 p-3 sm:p-4"
+                        aria-live="polite"
+                        aria-relevant="additions"
+                    ></div>
+                    @include('partials.smart-mode-banner')
+                    @isset($slot)
+                        {{ $slot }}
+                    @else
+                        @yield('body')
+                    @endisset
+                </div>
+            </div>
+        </div>
     @else
-        @yield('body')
-    @endisset
+        @isset($slot)
+            {{ $slot }}
+        @else
+            @yield('body')
+        @endisset
+    @endauth
     @livewireScripts
 </body>
 </html>

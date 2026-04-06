@@ -257,6 +257,10 @@ For **server errors**, check `storage/logs/laravel.log` (and your HTTP server or
 **Tests:** `php artisan test --compact`  
 **PHP formatting:** `vendor/bin/pint --dirty`
 
+**In-app notifications (bell).** Alerts such as over-budget categories and plan checks are stored in the `notifications` table only. They are not sent by email or push from this feature. A queue worker is **not** required for these database notifications. The UI refreshes the bell on a short **Livewire poll** and can show **toasts** when new unread items appear — **no Pusher, Echo, or WebSockets** are required. If you later queue other mail or jobs, run Laravel’s scheduler (`php artisan schedule:run` from cron) and a queue worker as usual.
+
+**Shared budgets (Phase 5, no WebSockets).** Teammates see each other’s spending in **Who spent what** on the planner and in **Activity**. The **dashboard** and **activity** pages **poll periodically** so totals update without a full refresh. The **budget planner** does **not** auto-refresh (that could overwrite unsaved edits); use **Refresh** after a partner changes the plan. Early in the month, **Month check-in** on the dashboard summarizes **last month’s** income/expense/net for accounts you can access. **Sinking fund** rules can include an optional **goal name**, **savings target**, and an approximate **months-to-target** hint from the monthly add.
+
 **Documentation:** Laravel [https://laravel.com/docs](https://laravel.com/docs), Livewire [https://livewire.laravel.com/docs](https://livewire.laravel.com/docs).
 
 ---

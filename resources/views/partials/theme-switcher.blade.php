@@ -19,13 +19,7 @@
         var ls = localStorage.getItem(k);
         var ss = sessionStorage.getItem(k);
         var t = null;
-        if (
-            (ls === 'dracula' || ls === 'cupcake') &&
-            (ss === 'dracula' || ss === 'cupcake') &&
-            ls !== ss
-        ) {
-            t = ss;
-        } else if (ls === 'dracula' || ls === 'cupcake') {
+        if (ls === 'dracula' || ls === 'cupcake') {
             t = ls;
         } else if (ss === 'dracula' || ss === 'cupcake') {
             t = ss;

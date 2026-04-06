@@ -22,10 +22,6 @@ function readStoredTheme() {
         //
     }
 
-    if (isValidTheme(fromLocal) && isValidTheme(fromSession) && fromLocal !== fromSession) {
-        return fromSession;
-    }
-
     if (isValidTheme(fromLocal)) {
         return fromLocal;
     }

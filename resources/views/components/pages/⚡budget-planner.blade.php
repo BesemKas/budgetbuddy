@@ -2,18 +2,25 @@
 
 use App\Enums\BankAccountKind;
 use App\Enums\BudgetPriority;
+use App\Enums\BudgetRole;
 use App\Enums\LedgerEntryType;
+use App\Enums\SmartMode;
 use App\Models\Budget;
 use App\Models\BudgetMonthSummary;
 use App\Models\Category;
 use App\Models\CategoryMonthBudget;
+use App\Models\SinkingFundRule;
+use App\Services\BudgetInAppNotifier;
 use App\Services\BudgetMonthCopyService;
+use App\Services\BudgetNotificationService;
 use App\Services\BudgetRealityCheckService;
+use App\Services\BudgetService;
 use App\Services\CurrentBudget;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -34,6 +41,17 @@ new #[Layout('layouts.app')] class extends Component
     public string $budgetBaseCurrency = 'ZAR';
 
     public bool $canEdit = false;
+
+    /** @var \Illuminate\Database\Eloquent\Collection<int, SinkingFundRule>|null */
+    public $sinkingFundRules = null;
+
+    public ?int $sinking_category_id = null;
+
+    public string $sinking_amount = '';
+
+    public string $sinking_goal_name = '';
+
+    public string $sinking_target_amount = '';
 
     public function mount(CurrentBudget $currentBudget): void
     {
@@ -106,6 +124,114 @@ new #[Layout('layouts.app')] class extends Component
                 'priority' => $row?->priority?->value,
             ];
         }
+
+        $this->sinkingFundRules = SinkingFundRule::query()
+            ->where('budget_id', $budget->id)
+            ->with('category')
+            ->orderBy('id')
+            ->get();
+
+        app(BudgetNotificationService::class)->markBudgetMonthNotificationsAsRead(
+            auth()->user(),
+            $budget->id,
+            $this->year,
+            $this->month
+        );
+    }
+
+    public function saveSinkingFundRule(CurrentBudget $currentBudget): void
+    {
+        $budget = $currentBudget->current();
+        if ($budget->roleFor(auth()->user()) !== BudgetRole::Owner) {
+            abort(403);
+        }
+
+        $v = Validator::make(
+            [
+                'sinking_category_id' => $this->sinking_category_id,
+                'sinking_amount' => $this->sinking_amount,
+                'sinking_goal_name' => $this->sinking_goal_name === '' ? null : $this->sinking_goal_name,
+                'sinking_target_amount' => $this->sinking_target_amount === '' ? null : $this->sinking_target_amount,
+            ],
+            [
+                'sinking_category_id' => ['required', 'integer', 'exists:categories,id'],
+                'sinking_amount' => ['required', 'numeric', 'min:0.01'],
+                'sinking_goal_name' => ['nullable', 'string', 'max:255'],
+                'sinking_target_amount' => ['nullable', 'numeric', 'min:0'],
+            ]
+        );
+
+        if ($v->fails()) {
+            foreach ($v->errors()->all() as $message) {
+                $this->addError('sinking_fund', $message);
+            }
+
+            return;
+        }
+
+        $validated = $v->validated();
+        $category = Category::query()->visibleToBudget($budget)->whereKey($validated['sinking_category_id'])->first();
+        if ($category === null || $category->type !== LedgerEntryType::Expense) {
+            $this->addError('sinking_fund', __('Pick an expense category for this budget.'));
+
+            return;
+        }
+
+        $goalName = $validated['sinking_goal_name'] ?? null;
+        $targetRaw = $validated['sinking_target_amount'] ?? null;
+        $targetAmount = ($targetRaw !== null && $targetRaw !== '') ? $targetRaw : null;
+
+        SinkingFundRule::query()->updateOrCreate(
+            [
+                'budget_id' => $budget->id,
+                'category_id' => $category->id,
+            ],
+            [
+                'monthly_amount' => $validated['sinking_amount'],
+                'goal_name' => $goalName !== null && $goalName !== '' ? $goalName : null,
+                'target_amount' => $targetAmount,
+                'is_active' => true,
+            ]
+        );
+
+        $this->sinking_category_id = null;
+        $this->sinking_amount = '';
+        $this->sinking_goal_name = '';
+        $this->sinking_target_amount = '';
+        $this->resetErrorBag('sinking_fund');
+        $this->loadMonth($currentBudget);
+    }
+
+    public function deleteSinkingFundRule(int $ruleId, CurrentBudget $currentBudget): void
+    {
+        $budget = $currentBudget->current();
+        if ($budget->roleFor(auth()->user()) !== BudgetRole::Owner) {
+            abort(403);
+        }
+
+        SinkingFundRule::query()
+            ->where('budget_id', $budget->id)
+            ->whereKey($ruleId)
+            ->delete();
+
+        $this->loadMonth($currentBudget);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{user_id: int, user_name: string, total_base: string}>
+     */
+    public function whoSpentWhat(): \Illuminate\Support\Collection
+    {
+        return app(BudgetRealityCheckService::class)->expenseTotalsByUserForMonth(
+            app(CurrentBudget::class)->current(),
+            $this->year,
+            $this->month
+        );
+    }
+
+    public function isBudgetOwner(): bool
+    {
+        return app(CurrentBudget::class)->current()->roleFor(auth()->user()) === BudgetRole::Owner;
     }
 
     public function expenseCategories(Budget $budget): Collection
@@ -153,16 +279,30 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
+        $income = $v->validated()['projectedIncome'];
+        if (auth()->user()->smart_mode === SmartMode::ZeroBased) {
+            if (bccomp($this->totalAssigned(), (string) $income, 4) > 0) {
+                $this->addError(
+                    'projectedIncome',
+                    __('In zero-based mode, projected income must be at least the total assigned to categories.')
+                );
+
+                return;
+            }
+        }
+
         BudgetMonthSummary::query()->updateOrCreate(
             [
                 'budget_id' => $budget->id,
                 'year' => $this->year,
                 'month' => $this->month,
             ],
-            ['projected_income' => $v->validated()['projectedIncome']]
+            ['projected_income' => $income]
         );
 
         $this->resetErrorBag('projectedIncome');
+
+        app(BudgetInAppNotifier::class)->notifyPlanLevelAlerts($budget, $this->year, $this->month);
     }
 
     public function saveLine(int $categoryId, CurrentBudget $currentBudget): void
@@ -223,6 +363,25 @@ new #[Layout('layouts.app')] class extends Component
             $priorityEnum = BudgetPriority::from($validated['priority']);
         }
 
+        if (auth()->user()->smart_mode === SmartMode::ZeroBased) {
+            $hypothetical = '0';
+            foreach ($this->lines as $cid => $l) {
+                $amt = (string) ($cid === $categoryId ? $validated['amount'] : ($l['amount'] ?? '0'));
+                if ($amt === '') {
+                    $amt = '0';
+                }
+                $hypothetical = bcadd($hypothetical, $amt, 4);
+            }
+            if (bccomp($hypothetical, (string) $this->projectedIncome, 4) > 0) {
+                $this->addError(
+                    'line_'.$categoryId,
+                    __('In zero-based mode, total assigned cannot exceed projected income.')
+                );
+
+                return;
+            }
+        }
+
         CategoryMonthBudget::query()->updateOrCreate(
             [
                 'budget_id' => $budget->id,
@@ -238,6 +397,8 @@ new #[Layout('layouts.app')] class extends Component
         );
 
         $this->resetErrorBag('line_'.$categoryId);
+
+        app(BudgetInAppNotifier::class)->notifyPlanLevelAlerts($budget, $this->year, $this->month);
     }
 
     public function copyPreviousMonth(CurrentBudget $currentBudget, BudgetMonthCopyService $copyService): void
@@ -245,8 +406,45 @@ new #[Layout('layouts.app')] class extends Component
         $this->authorizeEdit($currentBudget);
         $budget = $currentBudget->current();
 
-        $copyService->copyFromPreviousMonth($budget, $this->year, $this->month);
+        try {
+            $copyService->copyFromPreviousMonth($budget, $this->year, $this->month, auth()->user());
+        } catch (ValidationException $e) {
+            $messages = $e->errors();
+            $first = $messages['copy'][0] ?? $e->getMessage();
+            $this->addError('copy', $first);
+
+            return;
+        }
+
+        $this->resetErrorBag('copy');
         $this->loadMonth($currentBudget);
+
+        app(BudgetInAppNotifier::class)->notifyPlanLevelAlerts($budget, $this->year, $this->month);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function categoryPace(int $categoryId): ?array
+    {
+        return app(BudgetService::class)->getVelocity(
+            app(CurrentBudget::class)->current(),
+            $categoryId,
+            $this->year,
+            $this->month
+        );
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function unassignedFundingCategoryIds(): array
+    {
+        return app(BudgetRealityCheckService::class)->unassignedFundingCategoryIds(
+            app(CurrentBudget::class)->current(),
+            $this->year,
+            $this->month
+        );
     }
 
     public function totalAssigned(): string
@@ -305,6 +503,13 @@ new #[Layout('layouts.app')] class extends Component
         );
     }
 
+    public function syncPlannerFromServer(CurrentBudget $currentBudget): void
+    {
+        $budget = $currentBudget->current();
+        $this->authorize('view', $budget);
+        $this->loadMonth($currentBudget);
+    }
+
     private function authorizeEdit(CurrentBudget $currentBudget): void
     {
         $budget = $currentBudget->current();
@@ -347,6 +552,14 @@ new #[Layout('layouts.app')] class extends Component
                     <span class="text-base-content/80 font-medium">
                         {{ $this->monthLabel }}
                     </span>
+                    <button
+                        type="button"
+                        class="btn btn-ghost btn-xs"
+                        title="{{ __('Reload this month from the server (e.g. after a partner updates the plan).') }}"
+                        wire:click="syncPlannerFromServer"
+                    >
+                        {{ __('Refresh') }}
+                    </button>
                 </div>
                 @if ($canEdit)
                     <button
@@ -380,6 +593,9 @@ new #[Layout('layouts.app')] class extends Component
                     <span class="font-mono text-lg">{{ number_format((float) $this->totalAssigned(), 2) }} {{ $budgetBaseCurrency }}</span>
                 </div>
             </div>
+            @error('copy')
+                <div role="alert" class="alert alert-error alert-soft text-sm">{{ $message }}</div>
+            @enderror
         </div>
     </div>
 
@@ -410,6 +626,18 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     @endif
 
+    @php
+        $unassignedIds = $this->unassignedFundingCategoryIds();
+        $unassignedNames = $this->categories->filter(fn ($c) => in_array($c->id, $unassignedIds, true))->pluck('name')->implode(', ');
+    @endphp
+    @if ($unassignedNames !== '')
+        <div role="status" class="alert alert-warning alert-soft mt-4 shadow-sm">
+            <span class="text-sm">
+                {{ __(':names — planned amount with no linked account (link an account so funding checks are clear).', ['names' => $unassignedNames]) }}
+            </span>
+        </div>
+    @endif
+
     <div class="card bg-base-100 mt-4 border border-base-300/60 shadow-sm">
         <div class="card-body p-0">
             <div class="overflow-x-auto overscroll-x-contain">
@@ -418,6 +646,7 @@ new #[Layout('layouts.app')] class extends Component
                         <tr>
                             <th>{{ __('Category') }}</th>
                             <th class="text-end">{{ __('Amount') }}</th>
+                            <th class="hidden md:table-cell">{{ __('Pace') }}</th>
                             <th>{{ __('Linked account') }}</th>
                             <th>{{ __('Priority') }}</th>
                         </tr>
@@ -445,6 +674,23 @@ new #[Layout('layouts.app')] class extends Component
                                     @error('line_'.$category->id)
                                         <span class="block text-xs text-error">{{ $message }}</span>
                                     @enderror
+                                </td>
+                                <td class="hidden align-top md:table-cell">
+                                    @php $pace = $this->categoryPace($category->id); @endphp
+                                    @if ($pace && ! ($pace['is_future_month'] ?? false))
+                                        <div class="text-xs">
+                                            <span class="font-mono">{{ number_format((float) $pace['actual_daily_base'], 2) }}</span>
+                                            <span class="text-base-content/50"> / </span>
+                                            <span class="font-mono">{{ number_format((float) $pace['ideal_daily_base'], 2) }}</span>
+                                            <span class="text-base-content/60">{{ $budgetBaseCurrency }}</span>
+                                        </div>
+                                        <div class="text-base-content/50 text-[0.65rem]">{{ __('spent vs even spread / day') }}</div>
+                                        @if ($pace['is_over_pace'])
+                                            <span class="badge badge-warning badge-xs mt-1">{{ __('Over pace') }}</span>
+                                        @endif
+                                    @else
+                                        <span class="text-base-content/40 text-xs">—</span>
+                                    @endif
                                 </td>
                                 <td>
                                     <select
@@ -477,7 +723,7 @@ new #[Layout('layouts.app')] class extends Component
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="text-base-content/60">{{ __('No expense categories available for this budget.') }}</td>
+                                <td colspan="5" class="text-base-content/60">{{ __('No expense categories available for this budget.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -485,4 +731,129 @@ new #[Layout('layouts.app')] class extends Component
             </div>
         </div>
     </div>
+
+    <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
+        <div class="card-body gap-3 p-4 sm:p-6">
+            <h2 class="card-title text-base sm:text-lg">{{ __('Who spent what') }}</h2>
+            <p class="text-base-content/60 text-xs">
+                {{ __('Expense totals in :currency (base) for this month, by person who recorded the transaction.', ['currency' => $budgetBaseCurrency]) }}
+            </p>
+            <div class="overflow-x-auto overscroll-x-contain rounded-lg">
+                <table class="table table-zebra table-sm md:table-md min-w-[16rem]">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Person') }}</th>
+                            <th class="text-end">{{ __('Expenses') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($this->whoSpentWhat() as $row)
+                            <tr wire:key="who-spent-{{ $row['user_id'] }}">
+                                <td>{{ $row['user_name'] }}</td>
+                                <td class="text-end font-mono">{{ number_format((float) $row['total_base'], 2) }} {{ $budgetBaseCurrency }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="2" class="text-base-content/60">{{ __('No expense transactions this month yet.') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @if ($this->isBudgetOwner())
+        <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm">
+            <div class="card-body gap-4 p-4 sm:p-6">
+                <h2 class="card-title text-base sm:text-lg">{{ __('Sinking funds') }}</h2>
+                <p class="text-base-content/60 text-xs">
+                    {{ __('Each month (on the 1st) the scheduled job adds this amount to the category plan for that month. Use it for goals you fund a little at a time.') }}
+                </p>
+                @error('sinking_fund')
+                    <div role="alert" class="alert alert-error alert-soft text-sm">{{ $message }}</div>
+                @enderror
+                <form wire:submit="saveSinkingFundRule" class="flex flex-col gap-3">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                        <label class="form-control w-full max-w-xs">
+                            <span class="label"><span class="label-text text-sm">{{ __('Category') }}</span></span>
+                            <select class="select select-bordered select-sm w-full" wire:model="sinking_category_id">
+                                <option value="">{{ __('Choose…') }}</option>
+                                @foreach ($this->categories as $cat)
+                                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="form-control w-full max-w-[12rem]">
+                            <span class="label"><span class="label-text text-sm">{{ __('Monthly add') }} ({{ $budgetBaseCurrency }})</span></span>
+                            <input
+                                type="text"
+                                inputmode="decimal"
+                                class="input input-bordered input-sm w-full font-mono"
+                                wire:model="sinking_amount"
+                                placeholder="0.00"
+                            />
+                        </label>
+                        <button type="submit" class="btn btn-primary btn-sm">{{ __('Save rule') }}</button>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="form-control w-full">
+                            <span class="label"><span class="label-text text-sm">{{ __('Goal name') }} ({{ __('optional') }})</span></span>
+                            <input
+                                type="text"
+                                class="input input-bordered input-sm w-full"
+                                wire:model="sinking_goal_name"
+                                placeholder="{{ __('e.g. Annual insurance') }}"
+                            />
+                        </label>
+                        <label class="form-control w-full">
+                            <span class="label"><span class="label-text text-sm">{{ __('Savings target') }} ({{ __('optional') }})</span></span>
+                            <input
+                                type="text"
+                                inputmode="decimal"
+                                class="input input-bordered input-sm w-full font-mono"
+                                wire:model="sinking_target_amount"
+                                placeholder="{{ __('Total amount to save') }}"
+                            />
+                        </label>
+                    </div>
+                    <p class="text-base-content/60 text-[0.7rem]">
+                        {{ __('Target is a hint for labels and “≈ months to goal” from your monthly add — not enforced automatically.') }}
+                    </p>
+                </form>
+                @if ($sinkingFundRules !== null && $sinkingFundRules->isNotEmpty())
+                    <ul class="divide-y divide-base-300/50 rounded-box border border-base-300/60">
+                        @foreach ($sinkingFundRules as $rule)
+                            <li class="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm" wire:key="sink-rule-{{ $rule->id }}">
+                                <span class="min-w-0">
+                                    <span class="font-medium">{{ $rule->category->name }}</span>
+                                    @if ($rule->goal_name)
+                                        <span class="text-base-content/80"> — {{ $rule->goal_name }}</span>
+                                    @endif
+                                    <span class="text-base-content/70 block text-xs">
+                                        {{ __(':amount / mo', ['amount' => number_format((float) $rule->monthly_amount, 2).' '.$budgetBaseCurrency]) }}
+                                        @if ($rule->target_amount !== null && (float) $rule->target_amount > 0)
+                                            · {{ __('Target :amount', ['amount' => number_format((float) $rule->target_amount, 2).' '.$budgetBaseCurrency]) }}
+                                        @endif
+                                        @php $estMo = $rule->estimatedMonthsAtMonthlyRate(); @endphp
+                                        @if ($estMo !== null)
+                                            · {{ __('≈ :n months to target at this rate', ['n' => $estMo]) }}
+                                        @endif
+                                    </span>
+                                </span>
+                                <button
+                                    type="button"
+                                    class="btn btn-ghost btn-xs text-error"
+                                    wire:click="deleteSinkingFundRule({{ $rule->id }})"
+                                    wire:confirm="{{ __('Remove this sinking fund rule?') }}"
+                                >
+                                    {{ __('Remove') }}
+                                </button>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        </div>
+    @endif
 </div>

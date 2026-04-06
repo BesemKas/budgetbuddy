@@ -26,6 +26,7 @@ class User extends Authenticatable
         'base_currency',
         'payday_day',
         'smart_mode',
+        'sweep_prompt_dismissed_month',
     ];
 
     /**

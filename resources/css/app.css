@@ -93,4 +93,36 @@
     .bb-modal-box {
         @apply modal-box max-h-[min(90dvh,100%)] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto sm:w-full;
     }
+
+    /* Collapsible app sidebar: sits below header; expanded vs icon rail (see resources/js/app-sidebar.js) */
+    #bb-app-sidebar {
+        @apply flex shrink-0 flex-col self-stretch border-r border-base-300 bg-base-200 text-base-content;
+        width: var(--bb-sidebar-expanded, 16rem);
+        min-height: 0;
+        transition: width 0.2s ease;
+    }
+
+    html.bb-sidebar-collapsed #bb-app-sidebar {
+        width: var(--bb-sidebar-collapsed, 4.5rem);
+    }
+
+    html.bb-sidebar-collapsed #bb-app-sidebar .sidebar-nav-label {
+        @apply sr-only;
+    }
+
+    html.bb-sidebar-collapsed #bb-app-sidebar .menu :where(li > a) {
+        @apply justify-center gap-0 px-0;
+    }
+
+    html.bb-sidebar-collapsed #bb-app-sidebar .sidebar-header-inner {
+        @apply justify-center px-0;
+    }
+
+    .bb-sidebar-toggle-icon {
+        transition: transform 0.2s ease;
+    }
+
+    html.bb-sidebar-collapsed .bb-sidebar-toggle-icon {
+        transform: rotate(180deg);
+    }
 }

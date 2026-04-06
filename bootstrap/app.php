@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('budget:snapshot-periods')->monthlyOn(1, '1:00');
+        $schedule->command('budget:apply-sinking-fund-rules')->monthlyOn(1, '2:00');
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectGuestsTo(fn () => route('login'));

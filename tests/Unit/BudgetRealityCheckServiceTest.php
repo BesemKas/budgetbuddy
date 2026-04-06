@@ -7,8 +7,10 @@ use App\Models\Budget;
 use App\Models\BudgetMonthSummary;
 use App\Models\Category;
 use App\Models\CategoryMonthBudget;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\BudgetRealityCheckService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -95,6 +97,59 @@ it('detects category lines linked to credit accounts', function () {
     expect($ids)->toBe([(int) $category->id]);
 });
 
+it('computes category spend pace vs even daily spread', function () {
+    $user = User::factory()->create();
+    $budget = Budget::bootstrapPersonalForUser($user);
+
+    $category = Category::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'type' => LedgerEntryType::Expense,
+    ]);
+
+    $y = 2026;
+    $m = 5;
+
+    CategoryMonthBudget::query()->create([
+        'budget_id' => $budget->id,
+        'category_id' => $category->id,
+        'year' => $y,
+        'month' => $m,
+        'amount' => '3100.0000',
+        'bank_account_id' => null,
+        'priority' => null,
+    ]);
+
+    $account = BankAccount::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'currency_code' => $budget->base_currency,
+    ]);
+
+    Carbon::setTestNow(Carbon::create(2026, 5, 10, 12, 0, 0));
+
+    Transaction::query()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'bank_account_id' => $account->id,
+        'category_id' => $category->id,
+        'amount' => '1500.0000',
+        'type' => LedgerEntryType::Expense,
+        'currency_code' => $account->currency_code,
+        'exchange_rate' => '1',
+        'occurred_on' => '2026-05-05',
+        'description' => null,
+    ]);
+
+    $pace = app(BudgetRealityCheckService::class)->categorySpendPace($budget, $category->id, $y, $m);
+
+    expect($pace)->not->toBeNull()
+        ->and($pace['days_elapsed'])->toBe(10)
+        ->and($pace['is_over_pace'])->toBeTrue();
+
+    Carbon::setTestNow();
+});
+
 it('compares assigned totals to projected income for zero-based', function () {
     $user = User::factory()->create();
     $budget = Budget::bootstrapPersonalForUser($user);
@@ -126,4 +181,51 @@ it('compares assigned totals to projected income for zero-based', function () {
 
     expect($z['is_within_income'])->toBeFalse()
         ->and($z['overage_base'])->toBe('2000.0000');
+});
+
+it('lists expense categories with a plan but no linked account as unassigned funding', function () {
+    $user = User::factory()->create();
+    $budget = Budget::bootstrapPersonalForUser($user);
+
+    $withLink = Category::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'type' => LedgerEntryType::Expense,
+    ]);
+
+    $noLink = Category::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'type' => LedgerEntryType::Expense,
+    ]);
+
+    $account = BankAccount::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'currency_code' => $budget->base_currency,
+    ]);
+
+    CategoryMonthBudget::query()->create([
+        'budget_id' => $budget->id,
+        'category_id' => $withLink->id,
+        'year' => 2026,
+        'month' => 7,
+        'amount' => '100.0000',
+        'bank_account_id' => $account->id,
+        'priority' => null,
+    ]);
+
+    CategoryMonthBudget::query()->create([
+        'budget_id' => $budget->id,
+        'category_id' => $noLink->id,
+        'year' => 2026,
+        'month' => 7,
+        'amount' => '50.0000',
+        'bank_account_id' => null,
+        'priority' => null,
+    ]);
+
+    $ids = app(BudgetRealityCheckService::class)->unassignedFundingCategoryIds($budget, 2026, 7);
+
+    expect($ids)->toBe([(int) $noLink->id]);
 });

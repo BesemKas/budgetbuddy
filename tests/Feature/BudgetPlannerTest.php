@@ -1,8 +1,12 @@
 <?php
 
 use App\Enums\BudgetRole;
+use App\Enums\LedgerEntryType;
+use App\Enums\SmartMode;
 use App\Models\Budget;
 use App\Models\BudgetMonthSummary;
+use App\Models\Category;
+use App\Models\CategoryMonthBudget;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -74,4 +78,72 @@ it('copies the previous month into the current month', function () {
         ->first();
 
     expect($summary?->projected_income)->toBe('30000.0000');
+});
+
+it('blocks a category line in zero-based mode when assigned total would exceed projected income', function () {
+    $user = User::factory()->create(['smart_mode' => SmartMode::ZeroBased]);
+    $budget = Budget::bootstrapPersonalForUser($user);
+    $year = (int) now()->year;
+    $month = (int) now()->month;
+
+    BudgetMonthSummary::query()->updateOrCreate(
+        [
+            'budget_id' => $budget->id,
+            'year' => $year,
+            'month' => $month,
+        ],
+        ['projected_income' => '1000.0000']
+    );
+
+    $category = Category::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'type' => LedgerEntryType::Expense,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages.budget-planner')
+        ->set('projectedIncome', '1000')
+        ->call('saveProjectedIncome')
+        ->set('lines.'.$category->id.'.amount', '1500')
+        ->call('saveLine', $category->id)
+        ->assertHasErrors('line_'.$category->id);
+});
+
+it('blocks lowering projected income below assigned totals in zero-based mode', function () {
+    $user = User::factory()->create(['smart_mode' => SmartMode::ZeroBased]);
+    $budget = Budget::bootstrapPersonalForUser($user);
+    $year = (int) now()->year;
+    $month = (int) now()->month;
+
+    $category = Category::factory()->create([
+        'user_id' => $user->id,
+        'budget_id' => $budget->id,
+        'type' => LedgerEntryType::Expense,
+    ]);
+
+    BudgetMonthSummary::query()->updateOrCreate(
+        [
+            'budget_id' => $budget->id,
+            'year' => $year,
+            'month' => $month,
+        ],
+        ['projected_income' => '1000.0000']
+    );
+
+    CategoryMonthBudget::query()->create([
+        'budget_id' => $budget->id,
+        'category_id' => $category->id,
+        'year' => $year,
+        'month' => $month,
+        'amount' => '600.0000',
+        'bank_account_id' => null,
+        'priority' => null,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages.budget-planner')
+        ->set('projectedIncome', '500')
+        ->call('saveProjectedIncome')
+        ->assertHasErrors('projectedIncome');
 });
