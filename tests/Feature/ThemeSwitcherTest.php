@@ -19,6 +19,7 @@ it('includes the theme switcher on the dashboard', function (): void {
         ->get(route('dashboard'))
         ->assertSuccessful()
         ->assertSee('bb-app-sidebar', escape: false)
+        ->assertSee('bb-mobile-nav', escape: false)
         ->assertSee('bb-sidebar-toggle', escape: false)
         ->assertSee('bb-theme-controller', escape: false)
         ->assertSee('theme-controller', escape: false)

@@ -1,4 +1,16 @@
 const storageKey = 'budgetbuddy-sidebar-collapsed';
+const mobileNavId = 'bb-mobile-nav';
+
+function closeMobileDrawer() {
+    const el = document.getElementById(mobileNavId);
+    if (el instanceof HTMLInputElement) {
+        el.checked = false;
+    }
+}
+
+function isMobileNavViewport() {
+    return window.matchMedia('(max-width: 1023px)').matches;
+}
 
 function isCollapsed() {
     return document.documentElement.classList.contains('bb-sidebar-collapsed');
@@ -143,6 +155,9 @@ function onSidebarToggleClick(event) {
     if (!btn) {
         return;
     }
+    if (isMobileNavViewport()) {
+        return;
+    }
     document.documentElement.classList.toggle('bb-sidebar-collapsed');
     try {
         localStorage.setItem(storageKey, isCollapsed() ? '1' : '0');
@@ -152,11 +167,42 @@ function onSidebarToggleClick(event) {
     syncToggleUi();
 }
 
+function onSidebarNavClick(event) {
+    const link = event.target.closest('#bb-app-sidebar a[href]');
+    if (!link) {
+        return;
+    }
+    if (!isMobileNavViewport()) {
+        return;
+    }
+    closeMobileDrawer();
+}
+
+function onEscapeCloseDrawer(event) {
+    if (event.key !== 'Escape') {
+        return;
+    }
+    const el = document.getElementById(mobileNavId);
+    if (!(el instanceof HTMLInputElement) || !el.checked) {
+        return;
+    }
+    closeMobileDrawer();
+}
+
+function onResizeClearMobileDrawer() {
+    if (!isMobileNavViewport()) {
+        closeMobileDrawer();
+    }
+}
+
 function init() {
     applyCollapsedFromStorage();
     syncSidebarActiveNav();
 
     document.addEventListener('click', onSidebarToggleClick);
+    document.addEventListener('click', onSidebarNavClick);
+    document.addEventListener('keydown', onEscapeCloseDrawer);
+    window.addEventListener('resize', onResizeClearMobileDrawer);
 
     document.addEventListener('alpine:navigating', () => {
         applyCollapsedFromStorage();
@@ -165,6 +211,7 @@ function init() {
     document.addEventListener('livewire:navigated', () => {
         applyCollapsedFromStorage();
         syncSidebarActiveNav();
+        closeMobileDrawer();
     });
 }
 

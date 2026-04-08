@@ -102,27 +102,38 @@
         transition: width 0.2s ease;
     }
 
-    html.bb-sidebar-collapsed #bb-app-sidebar {
-        width: var(--bb-sidebar-collapsed, 4.5rem);
-    }
+    @media (width >= 64rem) {
+        html.bb-sidebar-collapsed #bb-app-sidebar {
+            width: var(--bb-sidebar-collapsed, 4.5rem);
+        }
 
-    html.bb-sidebar-collapsed #bb-app-sidebar .sidebar-nav-label {
-        @apply sr-only;
-    }
+        html.bb-sidebar-collapsed #bb-app-sidebar .sidebar-nav-label {
+            @apply sr-only;
+        }
 
-    html.bb-sidebar-collapsed #bb-app-sidebar .menu :where(li > a) {
-        @apply justify-center gap-0 px-0;
-    }
+        html.bb-sidebar-collapsed #bb-app-sidebar .menu :where(li > a) {
+            @apply justify-center gap-0 px-0;
+        }
 
-    html.bb-sidebar-collapsed #bb-app-sidebar .sidebar-header-inner {
-        @apply justify-center px-0;
+        html.bb-sidebar-collapsed #bb-app-sidebar .sidebar-header-inner {
+            @apply justify-center px-0;
+        }
     }
 
     .bb-sidebar-toggle-icon {
         transition: transform 0.2s ease;
     }
 
-    html.bb-sidebar-collapsed .bb-sidebar-toggle-icon {
-        transform: rotate(180deg);
+    @media (width >= 64rem) {
+        html.bb-sidebar-collapsed .bb-sidebar-toggle-icon {
+            transform: rotate(180deg);
+        }
+    }
+
+    /* Mobile drawer: readable width; desktop keeps rail width from --bb-sidebar-* */
+    @media (width < 64rem) {
+        #bb-app-sidebar {
+            width: min(20rem, 100vw);
+        }
     }
 }

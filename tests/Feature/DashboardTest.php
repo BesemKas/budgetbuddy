@@ -104,3 +104,15 @@ it('shows zero-based income warning when assigned exceeds projected income', fun
         ->test('pages.dashboard')
         ->assertSee(__('Assigned amounts exceed projected income by'), escape: false);
 });
+
+it('includes stacked layouts for small screens on category and transaction sections', function (): void {
+    $user = User::factory()->create();
+    $budget = Budget::bootstrapPersonalForUser($user);
+
+    session(['current_budget_id' => $budget->id]);
+
+    Livewire::actingAs($user)
+        ->test('pages.dashboard')
+        ->assertSee('space-y-2 md:hidden', escape: false)
+        ->assertSee('space-y-3 md:hidden', escape: false);
+});

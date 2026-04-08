@@ -418,7 +418,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="bb-page max-w-5xl" wire:poll.60s="refreshData">
+<div class="bb-page max-w-5xl min-w-0" wire:poll.60s="refreshData">
     @if (session('status'))
         <div role="status" class="alert alert-success alert-soft mb-4 text-sm">{{ session('status') }}</div>
     @endif
@@ -481,7 +481,7 @@ new #[Layout('layouts.app')] class extends Component
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div class="min-w-0">
             <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">{{ __('This month') }}</h1>
-            <p class="text-base-content/70 mt-1 text-sm">
+            <p class="text-base-content/70 mt-1 text-sm break-words">
                 {{ __('This month (:start – :end) in :currency. Track spending against your plan and stay on budget.', [
                     'start' => now()->startOfMonth()->toFormattedDateString(),
                     'end' => now()->endOfMonth()->toFormattedDateString(),
@@ -511,16 +511,16 @@ new #[Layout('layouts.app')] class extends Component
                 <div role="status" class="alert alert-warning alert-soft text-sm">{{ $zeroBasedAlertMessage }}</div>
             @endif
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+                <div class="min-w-0">
                     <h2 class="card-title text-base sm:text-lg">{{ __('Plan vs actual (this month)') }}</h2>
-                    <p class="text-base-content/60 text-xs">
+                    <p class="text-base-content/60 text-xs break-words">
                         {{ __('Planned category totals for this calendar month compared to expenses in :currency (base).', ['currency' => $budgetBaseCurrency]) }}
                     </p>
                 </div>
                 @if ($this->planStatus !== 'no_plan')
                     <span
                         @class([
-                            'badge badge-lg',
+                            'badge badge-lg shrink-0 self-start sm:self-auto',
                             'badge-success' => $this->planStatus === 'on_track',
                             'badge-warning' => $this->planStatus === 'near_limit',
                             'badge-error' => $this->planStatus === 'over_plan',
@@ -700,9 +700,9 @@ new #[Layout('layouts.app')] class extends Component
                         <dt>{{ __('Next payday') }}</dt>
                         <dd>{{ $nextPaydayLabel }} ({{ trans_choice(':count day|:count days', $daysUntilPayday, ['count' => $daysUntilPayday]) }})</dd>
                     </div>
-                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
                         <dt>{{ __('Daily runway') }}</dt>
-                        <dd class="text-right font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                        <dd class="font-mono sm:text-end {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
                             @if ($dailyRunway === null)
                                 {{ __('—') }}
                             @else
@@ -733,8 +733,30 @@ new #[Layout('layouts.app')] class extends Component
             ></div>
             <div>
                 <h3 class="text-sm font-semibold text-base-content/80">{{ __('Top categories') }}</h3>
-                <div class="overflow-x-auto overscroll-x-contain rounded-lg mt-2">
-                    <table class="table table-zebra table-sm md:table-md min-w-[18rem]">
+                <ul class="mt-2 space-y-2 md:hidden" role="list">
+                    @forelse ($this->topCategoryExpenseRows as $row)
+                        <li
+                            wire:key="cat-m-{{ $row['category_id'] }}"
+                            class="rounded-box border border-base-300/50 bg-base-200/20 px-3 py-2.5 text-sm"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <span class="min-w-0 font-medium break-words">{{ $row['name'] }}</span>
+                                <span class="shrink-0 font-mono text-xs tabular-nums text-base-content/70 {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                                    {{ number_format($row['percent'], 1) }}%
+                                </span>
+                            </div>
+                            <div class="mt-1 font-mono text-base tabular-nums {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                                {{ number_format((float) $row['total'], 2) }} {{ $budgetBaseCurrency }}
+                            </div>
+                        </li>
+                    @empty
+                        <li class="rounded-box border border-base-300/40 bg-base-200/10 px-3 py-4 text-center text-base-content/60 text-sm">
+                            {{ __('No expenses with categories this month yet.') }}
+                        </li>
+                    @endforelse
+                </ul>
+                <div class="mt-2 hidden overflow-x-auto overscroll-x-contain rounded-lg md:block">
+                    <table class="table table-zebra table-sm md:table-md min-w-[18rem] w-full">
                         <thead>
                             <tr>
                                 <th>{{ __('Category') }}</th>
@@ -769,8 +791,38 @@ new #[Layout('layouts.app')] class extends Component
     <div class="card bg-base-100 mt-6 border border-base-300/60 shadow-sm lg:mt-8">
         <div class="card-body gap-3 p-4 sm:p-6">
             <h2 class="card-title text-base sm:text-lg">{{ __('Recent transactions') }}</h2>
-            <div class="overflow-x-auto overscroll-x-contain">
-                <table class="table table-zebra table-sm md:table-md min-w-[42rem]">
+            <ul class="space-y-3 md:hidden" role="list">
+                @forelse ($recentTransactions as $tx)
+                    <li
+                        wire:key="tx-m-{{ $tx->id }}"
+                        class="rounded-box border border-base-300/50 bg-base-200/20 p-3 text-sm"
+                    >
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="font-mono text-xs text-base-content/70">{{ $tx->occurred_on->format('Y-m-d') }}</span>
+                            <span @class(['badge badge-sm shrink-0', 'badge-success' => $tx->type === \App\Enums\LedgerEntryType::Income, 'badge-error' => $tx->type === \App\Enums\LedgerEntryType::Expense])>
+                                {{ $tx->type->value }}
+                            </span>
+                        </div>
+                        <p class="mt-2 font-medium break-words">{{ $tx->category->name }}</p>
+                        <p class="mt-0.5 text-xs text-base-content/70 break-words">
+                            {{ $tx->bankAccount->name }}
+                            <span class="text-base-content/50">·</span>
+                            {{ $tx->user->name }}
+                        </p>
+                        <p class="mt-2 text-end font-mono text-base tabular-nums {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                            {{ number_format((float) $tx->amount, 2) }} {{ $tx->currency_code }}
+                        </p>
+                    </li>
+                @empty
+                    <li class="rounded-box border border-base-300/40 bg-base-200/10 px-3 py-4 text-center text-base-content/60 text-sm">
+                        {{ __('No transactions yet. Add one with Quick add,') }}
+                        <a href="{{ route('transactions.import') }}" wire:navigate class="link link-primary">{{ __('import') }}</a>{{ __(', or open ') }}
+                        <a href="{{ route('budget.planner') }}" wire:navigate class="link link-primary">{{ __('Budget planner') }}</a>.
+                    </li>
+                @endforelse
+            </ul>
+            <div class="hidden overflow-x-auto overscroll-x-contain md:block">
+                <table class="table table-zebra table-sm md:table-md w-full min-w-[36rem]">
                     <thead>
                         <tr>
                             <th>{{ __('Date') }}</th>
@@ -786,14 +838,14 @@ new #[Layout('layouts.app')] class extends Component
                             <tr wire:key="tx-{{ $tx->id }}">
                                 <td class="whitespace-nowrap">{{ $tx->occurred_on->format('Y-m-d') }}</td>
                                 <td class="text-sm">{{ $tx->user->name }}</td>
-                                <td>{{ $tx->bankAccount->name }}</td>
-                                <td>{{ $tx->category->name }}</td>
+                                <td class="max-w-[10rem] break-words">{{ $tx->bankAccount->name }}</td>
+                                <td class="max-w-[10rem] break-words">{{ $tx->category->name }}</td>
                                 <td>
                                     <span @class(['badge badge-sm', 'badge-success' => $tx->type === \App\Enums\LedgerEntryType::Income, 'badge-error' => $tx->type === \App\Enums\LedgerEntryType::Expense])>
                                         {{ $tx->type->value }}
                                     </span>
                                 </td>
-                                <td class="text-end font-mono {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
+                                <td class="text-end font-mono whitespace-nowrap {{ $privacyBlur ? 'blur-sm select-none' : '' }}">
                                     {{ number_format((float) $tx->amount, 2) }} {{ $tx->currency_code }}
                                 </td>
                             </tr>

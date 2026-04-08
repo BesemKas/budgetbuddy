@@ -20,7 +20,7 @@
         })();
     </script>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="description" content="{{ __('Personal and household budgeting: accounts in multiple currencies, monthly plans, imports, and shared budgets—sign in with email, no password.') }}">
     <title>{{ __('Budget Buddy') }} — {{ __('Plan money with confidence') }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/budget-buddy-logo.png') }}">
@@ -44,12 +44,35 @@
             </a>
         </div>
         <div class="navbar-end gap-1 sm:gap-2">
-            <a href="#features" class="btn btn-ghost btn-sm hidden normal-case text-base-content/80 sm:inline-flex">{{ __('Features') }}</a>
+            <details class="dropdown dropdown-end lg:hidden">
+                <summary class="btn btn-ghost btn-square" aria-label="{{ __('Menu') }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                    </svg>
+                </summary>
+                <ul class="dropdown-content menu z-[60] mt-2 w-56 rounded-box border border-base-300/60 bg-base-100 p-2 shadow-lg" role="menu">
+                    <li>
+                        <a href="#features" class="justify-between" onclick="this.closest('details')?.removeAttribute('open')">{{ __('Features') }}</a>
+                    </li>
+                    @if (Route::has('login'))
+                        @auth
+                            <li>
+                                <a href="{{ url('/dashboard') }}" class="justify-between font-medium" onclick="this.closest('details')?.removeAttribute('open')">{{ __('Dashboard') }}</a>
+                            </li>
+                        @else
+                            <li>
+                                <a href="{{ route('login') }}" class="justify-between font-medium" onclick="this.closest('details')?.removeAttribute('open')">{{ __('Log in') }}</a>
+                            </li>
+                        @endauth
+                    @endif
+                </ul>
+            </details>
+            <a href="#features" class="btn btn-ghost btn-sm hidden normal-case text-base-content/80 lg:inline-flex">{{ __('Features') }}</a>
             @if (Route::has('login'))
                 @auth
-                    <a href="{{ url('/dashboard') }}" class="btn btn-primary btn-sm sm:btn-md">{{ __('Dashboard') }}</a>
+                    <a href="{{ url('/dashboard') }}" class="btn btn-primary btn-sm hidden lg:inline-flex sm:btn-md">{{ __('Dashboard') }}</a>
                 @else
-                    <a href="{{ route('login') }}" class="btn btn-primary btn-sm sm:btn-md">{{ __('Log in') }}</a>
+                    <a href="{{ route('login') }}" class="btn btn-primary btn-sm hidden lg:inline-flex sm:btn-md">{{ __('Log in') }}</a>
                 @endauth
             @endif
             @include('partials.theme-switcher')

@@ -36,8 +36,11 @@ function renderBarCharts() {
             chart: {
                 type: 'bar',
                 height: 280,
+                width: '100%',
                 toolbar: { show: false },
                 fontFamily: 'inherit',
+                redrawOnParentResize: true,
+                redrawOnWindowResize: true,
             },
             series: [
                 { name: incomeLabel, data: income },
@@ -64,6 +67,29 @@ function renderBarCharts() {
                     },
                 },
             },
+            responsive: [
+                {
+                    breakpoint: 768,
+                    options: {
+                        chart: { height: 260 },
+                        plotOptions: { bar: { columnWidth: '58%', borderRadius: 2 } },
+                    },
+                },
+                {
+                    breakpoint: 480,
+                    options: {
+                        chart: { height: 300 },
+                        xaxis: {
+                            labels: {
+                                rotate: -40,
+                                maxHeight: 88,
+                                style: { fontSize: '10px' },
+                            },
+                        },
+                        legend: { fontSize: '11px', offsetY: 2 },
+                    },
+                },
+            ],
         });
 
         chart.render();
@@ -102,7 +128,10 @@ function renderCategoryDonuts() {
             chart: {
                 type: 'donut',
                 height: 320,
+                width: '100%',
                 fontFamily: 'inherit',
+                redrawOnParentResize: true,
+                redrawOnWindowResize: true,
             },
             labels,
             series: values.map((v) => Number(v)),
@@ -122,6 +151,24 @@ function renderCategoryDonuts() {
                     },
                 },
             },
+            responsive: [
+                {
+                    breakpoint: 480,
+                    options: {
+                        chart: { height: 300 },
+                        legend: {
+                            position: 'bottom',
+                            fontSize: '11px',
+                            itemMargin: { horizontal: 4, vertical: 2 },
+                        },
+                        plotOptions: {
+                            pie: {
+                                donut: { size: '58%' },
+                            },
+                        },
+                    },
+                },
+            ],
         });
 
         chart.render();

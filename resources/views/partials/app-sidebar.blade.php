@@ -2,8 +2,16 @@
     $navUser = auth()->user();
     $currentBudget = $navUser ? app(\App\Services\CurrentBudget::class)->current() : null;
 @endphp
-<aside id="bb-app-sidebar" aria-label="{{ __('Primary navigation') }}">
-    <div class="sidebar-header-inner flex h-12 shrink-0 items-center border-b border-base-300 px-2 py-1">
+<aside id="bb-app-sidebar" class="flex min-h-full min-w-0 flex-col" aria-label="{{ __('Primary navigation') }}">
+    <div class="flex items-center justify-between border-b border-base-300 px-3 py-3 lg:hidden">
+        <span class="text-sm font-semibold text-base-content">{{ __('Menu') }}</span>
+        <label for="bb-mobile-nav" class="btn btn-ghost btn-square btn-sm" aria-label="{{ __('Close menu') }}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </label>
+    </div>
+    <div class="sidebar-header-inner hidden h-12 shrink-0 items-center border-b border-base-300 px-2 py-1 lg:flex">
         <button
             id="bb-sidebar-toggle"
             type="button"
